@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1e3a5f">
-<title>SS H505 ACMV Task Recorder (Online)</title>
+<title>SS H505 ACMV Task Recorder (Online) v1.1</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1e293b; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
@@ -24,6 +24,7 @@
   button.danger { background: #b91c1c; }
   button.small { padding: 8px 12px; font-size: 0.9rem; min-height: 36px; }
   button.success { background: #15803d; }
+  button:disabled { opacity: 0.6; }
   .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
   @media (min-width: 640px) { .grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -38,7 +39,6 @@
   .in-progress { background: #fef3c7; }
   .completed { background: #d1fae5; }
   .overdue { background: #fee2e2; color: #991b1b; }
-  .pending { background: #fde68a; }
   .type-badge { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 4px; }
   .hidden { display: none; }
   .login-box { max-width: 420px; margin: 24px auto; }
@@ -59,12 +59,13 @@
   .marquee-wrap { overflow: hidden; white-space: nowrap; margin-top: 4px; }
   .marquee-text { display: inline-block; padding-left: 100%; animation: marquee 20s linear infinite; }
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+  .loading { opacity: 0.7; pointer-events: none; }
 </style>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, onSnapshot, query, where, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCBv6p_JIac4d_JJ8aGrhCAD7FbdRcyxrw",
@@ -80,37 +81,27 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// EmailJS configuration
 const EMAILJS_SERVICE_ID = "service_0kbno3j";
 const EMAILJS_PUBLIC_KEY = "sRoFQ9Ji6mjNKSCOc";
 const EMAILJS_TEMPLATE_ID = "template_81250ji";
-
 emailjs.init(EMAILJS_PUBLIC_KEY);
 
-async function sendEmail(toEmail, subject, message) {
-  if (!toEmail || !EMAILJS_TEMPLATE_ID.startsWith('template_') || EMAILJS_TEMPLATE_ID === 'template_xxxxxxx') return;
-  try {
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      to_email: toEmail,
-      subject: subject,
-      message: message,
-      from_name: "SS H505 Task Recorder"
-    });
-  } catch (err) {
-    console.warn("Email send failed:", err);
-  }
-}
-
-const ADMIN_EMAIL = "admin@newland.com.hk"; // Change if needed; first user who registers as this becomes admin
+const ADMIN_EMAIL = "admin@newland.com.hk";
 let currentUser = null;
 let tasks = [];
 let inbox = [];
 let users = [];
-let taskTypes = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
 let announcement = 'Welcome to the SS H505 ACMV Task Recorder.';
-let programme = [];
-let progVersion = 'Rev. 7 r3';
 let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
+
+async function sendEmail(toEmail, subject, message) {
+  if (!toEmail) return;
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: toEmail, subject, message, from_name: "SS H505 Task Recorder"
+    });
+  } catch (err) { console.warn("Email failed:", err); }
+}
 
 window.showAuth = function(mode) {
   document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
@@ -123,6 +114,10 @@ window.showAuth = function(mode) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-form').onsubmit = async (e) => {
     e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Logging in...';
+    btn.disabled = true;
+    document.getElementById('auth-error').textContent = '';
     let email = document.getElementById('login-user').value.trim();
     if (email && !email.includes('@')) email += '@newland.com.hk';
     const pass = document.getElementById('login-pass').value;
@@ -130,11 +125,17 @@ document.addEventListener('DOMContentLoaded', () => {
       await signInWithEmailAndPassword(auth, email, pass);
     } catch (err) {
       document.getElementById('auth-error').textContent = err.message;
+      btn.textContent = 'Login';
+      btn.disabled = false;
     }
   };
 
   document.getElementById('register-form').onsubmit = async (e) => {
     e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Creating account...';
+    btn.disabled = true;
+    document.getElementById('auth-error').textContent = '';
     let email = document.getElementById('reg-user').value.trim();
     if (email && !email.includes('@')) email += '@newland.com.hk';
     const name = document.getElementById('reg-name').value.trim();
@@ -145,19 +146,36 @@ document.addEventListener('DOMContentLoaded', () => {
       await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
     } catch (err) {
       document.getElementById('auth-error').textContent = err.message;
+      btn.textContent = 'Create Account';
+      btn.disabled = false;
     }
+  };
+
+  document.getElementById('task-form').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    const data = {
+      title: document.getElementById('task-title').value.trim(),
+      type: document.getElementById('task-type').value,
+      description: document.getElementById('task-desc').value.trim(),
+      targetDate: document.getElementById('task-target').value,
+      status: document.getElementById('task-status').value,
+      user: currentUser.uid,
+      created: serverTimestamp(),
+      comments: [],
+      score: null
+    };
+    await addDoc(collection(db, 'tasks'), data);
+    document.getElementById('task-form').reset();
+    showView('all');
   };
 });
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (userDoc.exists()) {
-      currentUser = { uid: user.uid, ...userDoc.data() };
-    } else {
-      currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-      await setDoc(doc(db, 'users', user.uid), currentUser);
-    }
+    currentUser = userDoc.exists() ? { uid: user.uid, ...userDoc.data() } : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+    if (!userDoc.exists()) await setDoc(doc(db, 'users', user.uid), currentUser);
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('app-section').classList.remove('hidden');
     document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
@@ -175,6 +193,7 @@ onAuthStateChanged(auth, async (user) => {
 window.logout = () => signOut(auth);
 
 function startListeners() {
+  if (unsubTasks) unsubTasks();
   unsubTasks = onSnapshot(collection(db, 'tasks'), snap => {
     tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
@@ -186,17 +205,10 @@ function startListeners() {
   });
   unsubUsers = onSnapshot(collection(db, 'users'), snap => {
     users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-    populateUserFilter();
   });
   unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
-    if (snap.exists()) {
-      const data = snap.data();
-      announcement = data.announcement || announcement;
-      taskTypes = data.taskTypes || taskTypes;
-      progVersion = data.progVersion || progVersion;
-      programme = data.programme || [];
-      renderDashboard();
-    }
+    if (snap.exists()) announcement = snap.data().announcement || announcement;
+    renderDashboard();
   });
 }
 
@@ -205,20 +217,18 @@ window.showView = function(v) {
   render();
 };
 
+window.markCompleted = async function(id) {
+  if (!confirm('Mark this task as Completed?')) return;
+  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: new Date().toISOString().slice(0,10) });
+  await notifyUser(currentUser.uid, 'Task completed', 'You marked a task as completed.');
+};
+
 async function notifyUser(uid, subject, message) {
   await addDoc(collection(db, 'inbox'), { to: uid, subject, message, date: serverTimestamp(), read: false });
   const u = users.find(x => x.uid === uid);
   if (u && u.email) await sendEmail(u.email, subject, message);
 }
 
-async function addTask(data) {
-  data.created = serverTimestamp();
-  data.user = currentUser.uid;
-  data.comments = [];
-  await addDoc(collection(db, 'tasks'), data);
-}
-
-// Simplified render functions (expand as needed)
 function render() {
   renderAll();
   renderMy();
@@ -228,23 +238,40 @@ function render() {
 function renderAll() {
   const list = document.getElementById('all-tasks-list');
   if (!tasks.length) { list.innerHTML = '<p>No tasks yet.</p>'; return; }
-  let html = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>';
+  let html = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th></tr></thead><tbody>';
   tasks.forEach(t => {
     const u = users.find(x => x.uid === t.user) || { name: 'Unknown' };
-    html += `<tr><td>${u.name}</td><td>${t.title}</td><td>${t.targetDate||'-'}</td><td>${t.status}</td></tr>`;
+    const canComplete = t.user === currentUser.uid && t.status !== 'completed';
+    html += `<tr>
+      <td>${u.name}</td>
+      <td>${t.title} <span class="type-badge">${t.type||''}</span></td>
+      <td>${t.targetDate||'-'}</td>
+      <td><span class="status ${t.status}">${t.status}</span></td>
+      <td>${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}</td>
+    </tr>`;
   });
   html += '</tbody></table></div>';
   list.innerHTML = html;
 }
 
 function renderMy() {
-  document.getElementById('my-tasks-list').innerHTML = '<p>My tasks (filter by current user in full version)</p>';
+  const mine = tasks.filter(t => t.user === currentUser.uid);
+  const el = document.getElementById('my-tasks-list');
+  if (!mine.length) { el.innerHTML = '<p>No tasks assigned to you yet.</p>'; return; }
+  let html = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>';
+  mine.forEach(t => {
+    html += `<tr><td>${t.title}</td><td>${t.targetDate||'-'}</td><td><span class="status ${t.status}">${t.status}</span></td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
 }
 
 function renderDashboard() {
+  const completed = tasks.filter(t => t.status === 'completed').length;
   document.getElementById('dash-content').innerHTML = `
     <div class="dash-stat"><strong>${tasks.length}</strong>Total Tasks</div>
-    <div class="dash-stat"><strong>${tasks.filter(t=>t.status==='completed').length}</strong>Completed</div>
+    <div class="dash-stat"><strong>${completed}</strong>Completed</div>
+    <div class="dash-stat"><strong>${tasks.length - completed}</strong>Open</div>
   `;
   document.getElementById('announcement-text').textContent = announcement;
 }
@@ -259,24 +286,20 @@ function updateInboxBadge() {
 function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
-  el.innerHTML = inbox.map(m => `<div class="inbox-item">${m.subject}<br><small>${m.message}</small></div>`).join('');
+  el.innerHTML = inbox.map(m => `<div style="padding:8px 0; border-bottom:1px solid #eee;"><strong>${m.subject}</strong><br><small>${m.message||''}</small></div>`).join('');
 }
 
-function populateUserFilter() {}
-
-// Seed initial settings if empty
+// Seed settings
 (async () => {
   const settingsRef = doc(db, 'settings', 'main');
   const snap = await getDoc(settingsRef);
-  if (!snap.exists()) {
-    await setDoc(settingsRef, { announcement, taskTypes, progVersion, programme: [] });
-  }
+  if (!snap.exists()) await setDoc(settingsRef, { announcement });
 })();
 </script>
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder (Online) <small style="font-weight:normal; opacity:0.8;">v1.0</small></h1>
+  <h1>SS H505 ACMV Task Recorder (Online) <small style="font-weight:normal; opacity:0.8;">v1.1</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -286,12 +309,12 @@ function populateUserFilter() {}
       <button id="tab-register" onclick="showAuth('register')">Register</button>
     </div>
     <form id="login-form">
-      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="john or john@newland.com.hk"></div>
+      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="admin or admin@newland.com.hk"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="login-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Login</button>
     </form>
     <form id="register-form" class="hidden">
-      <div style="margin-bottom:12px;"><label>Email prefix (will become name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Email prefix (becomes name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
       <div style="margin-bottom:12px;"><label>Display Name</label><input type="text" id="reg-name" required style="width:100%;"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="reg-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Create Account</button>
@@ -312,12 +335,53 @@ function populateUserFilter() {}
       <button onclick="showView('inbox')">Inbox <span id="inbox-badge" class="badge hidden">0</span></button>
       <button id="admin-perf" class="hidden" onclick="showView('perf')">Performance</button>
     </div>
-    <div id="view-all" class="card"><h2>All Tasks</h2><div id="all-tasks-list"></div></div>
-    <div id="view-my" class="card hidden"><h2>My Tasks</h2><div id="my-tasks-list"></div></div>
-    <div id="view-add" class="card hidden"><h2>Add Task</h2><p>Form will be fully wired in next update.</p></div>
-    <div id="view-inbox" class="card hidden"><h2>Inbox</h2><div id="inbox-list"></div></div>
-    <div id="view-settings" class="card hidden"><h2>Settings</h2></div>
-    <div id="view-perf" class="card hidden"><h2>Performance</h2></div>
+
+    <div id="view-all" class="card">
+      <h2>All Tasks</h2>
+      <div id="all-tasks-list"></div>
+    </div>
+
+    <div id="view-my" class="card hidden">
+      <h2>My Tasks</h2>
+      <div id="my-tasks-list"></div>
+    </div>
+
+    <div id="view-add" class="card hidden">
+      <h2>Add Task</h2>
+      <form id="task-form">
+        <div class="grid">
+          <div><label>Task Title *</label><input type="text" id="task-title" required style="width:100%;"></div>
+          <div><label>Type</label>
+            <select id="task-type" style="width:100%;">
+              <option>Drawing submission</option>
+              <option>Document submission</option>
+              <option>Coordination</option>
+              <option>Calculation</option>
+              <option>Material Submission</option>
+              <option>Others</option>
+            </select>
+          </div>
+          <div><label>Target Completion Date *</label><input type="date" id="task-target" required style="width:100%;"></div>
+          <div><label>Status</label>
+            <select id="task-status" style="width:100%;">
+              <option value="not-started">Not Started</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px;"><label>Description / Notes</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
+        <div style="margin-top:12px;"><button type="submit">Save Task</button></div>
+      </form>
+    </div>
+
+    <div id="view-inbox" class="card hidden">
+      <h2>Inbox</h2>
+      <div id="inbox-list"></div>
+    </div>
+
+    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Password change and account management will be added in the next update.</p></div>
+    <div id="view-perf" class="card hidden"><h2>Performance</h2><p>Team and individual performance views will be added in the next update.</p></div>
   </div>
 </div>
 </body>
