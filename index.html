@@ -120,32 +120,34 @@ window.showAuth = function(mode) {
   document.getElementById('auth-error').textContent = '';
 };
 
-document.getElementById('login-form').onsubmit = async (e) => {
-  e.preventDefault();
-  let email = document.getElementById('login-user').value.trim();
-  if (email && !email.includes('@')) email += '@newland.com.hk';
-  const pass = document.getElementById('login-pass').value;
-  try {
-    await signInWithEmailAndPassword(auth, email, pass);
-  } catch (err) {
-    document.getElementById('auth-error').textContent = err.message;
-  }
-};
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    let email = document.getElementById('login-user').value.trim();
+    if (email && !email.includes('@')) email += '@newland.com.hk';
+    const pass = document.getElementById('login-pass').value;
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (err) {
+      document.getElementById('auth-error').textContent = err.message;
+    }
+  };
 
-document.getElementById('register-form').onsubmit = async (e) => {
-  e.preventDefault();
-  let email = document.getElementById('reg-user').value.trim();
-  if (email && !email.includes('@')) email += '@newland.com.hk';
-  const name = document.getElementById('reg-name').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user';
-    await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
-  } catch (err) {
-    document.getElementById('auth-error').textContent = err.message;
-  }
-};
+  document.getElementById('register-form').onsubmit = async (e) => {
+    e.preventDefault();
+    let email = document.getElementById('reg-user').value.trim();
+    if (email && !email.includes('@')) email += '@newland.com.hk';
+    const name = document.getElementById('reg-name').value.trim();
+    const pass = document.getElementById('reg-pass').value;
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user';
+      await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
+    } catch (err) {
+      document.getElementById('auth-error').textContent = err.message;
+    }
+  };
+});
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -208,6 +210,8 @@ async function notifyUser(uid, subject, message) {
   const u = users.find(x => x.uid === uid);
   if (u && u.email) await sendEmail(u.email, subject, message);
 }
+
+async function addTask(data) {
   data.created = serverTimestamp();
   data.user = currentUser.uid;
   data.comments = [];
@@ -272,7 +276,7 @@ function populateUserFilter() {}
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder (Online)</h1>
+  <h1>SS H505 ACMV Task Recorder (Online) <small style="font-weight:normal; opacity:0.8;">v1.0</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
