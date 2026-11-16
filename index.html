@@ -7,8 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1e3a5f">
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%231e3a5f'/%3E%3Ctext x='90' y='110' font-size='80' text-anchor='middle' fill='white' font-family='system-ui'%3ET%3C/text%3E%3C/svg%3E">
-<title>SS H505 ACMV Task Recorder</title>
+<title>SS H505 ACMV Task Recorder (Online)</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1e293b; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
@@ -33,6 +32,7 @@
   th { background: #f1f5f9; font-weight: 600; white-space: nowrap; }
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
   .tabs button { background: #e2e8f0; color: #1e293b; flex: 1; min-width: 90px; min-height: 44px; }
+  .tabs button.active { background: #1e3a5f; color: white; }
   .status { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; }
   .not-started { background: #e2e8f0; }
   .in-progress { background: #fef3c7; }
@@ -40,43 +40,239 @@
   .overdue { background: #fee2e2; color: #991b1b; }
   .pending { background: #fde68a; }
   .type-badge { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 4px; }
-  .comment { background: #f8fafc; border-left: 3px solid #1e3a5f; padding: 10px; margin: 8px 0; font-size: 0.88rem; border-radius: 0 6px 6px 0; }
-  .score { font-weight: 700; color: #1e3a5f; }
   .hidden { display: none; }
   .login-box { max-width: 420px; margin: 24px auto; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-  .tabs button { background: #e2e8f0; color: #1e293b; flex: 1; min-width: 90px; }
-  .tabs button.active { background: #1e3a5f; color: white; }
   .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   @media (min-width: 640px) { .summary-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
   .stat { background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center; }
   .stat strong { display: block; font-size: 1.5rem; color: #1e3a5f; }
-  .upcoming { color: #b45309; font-weight: 500; }
   small { color: #64748b; }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   label { font-weight: 500; font-size: 0.95rem; display: block; margin-bottom: 4px; }
-  .inbox-item { border-bottom: 1px solid #e2e8f0; padding: 12px 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-  .inbox-item.unread { background: #eff6ff; margin: 0 -16px; padding: 12px 16px; border-radius: 6px; }
   .badge { background: #ef4444; color: white; border-radius: 10px; padding: 1px 6px; font-size: 0.75rem; margin-left: 4px; }
   .task-title { color: #1e3a5f; cursor: pointer; text-decoration: underline; }
-  .task-title:active { opacity: 0.7; }
-  .detail-row td { background: #f8fafc; padding: 14px 12px; }
-  .account-name { cursor: pointer; text-decoration: underline; }
   .dashboard { background: #1e3a5f; color: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
   .dashboard h2 { color: white; margin-top: 0; }
   .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .dash-stat { background: rgba(255,255,255,0.12); padding: 12px; border-radius: 8px; text-align: center; }
   .dash-stat strong { display: block; font-size: 1.6rem; }
-  .prog-activity { background: rgba(255,255,255,0.1); padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 0.9rem; }
-  .clickable-status { cursor: pointer; text-decoration: underline; }
   .marquee-wrap { overflow: hidden; white-space: nowrap; margin-top: 4px; }
   .marquee-text { display: inline-block; padding-left: 100%; animation: marquee 20s linear infinite; }
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 </style>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, where, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCBv6p_JIac4d_JJ8aGrhCAD7FbdRcyxrw",
+  authDomain: "ssh505-task-recorder.firebaseapp.com",
+  projectId: "ssh505-task-recorder",
+  storageBucket: "ssh505-task-recorder.firebasestorage.app",
+  messagingSenderId: "53469864424",
+  appId: "1:53469864424:web:2c5beef6410839554b045d",
+  measurementId: "G-W9QC2NMHVK"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// EmailJS configuration
+const EMAILJS_SERVICE_ID = "service_0kbno3j";
+const EMAILJS_PUBLIC_KEY = "sRoFQ9Ji6mjNKSCOc";
+const EMAILJS_TEMPLATE_ID = "template_81250ji";
+
+emailjs.init(EMAILJS_PUBLIC_KEY);
+
+async function sendEmail(toEmail, subject, message) {
+  if (!toEmail || !EMAILJS_TEMPLATE_ID.startsWith('template_') || EMAILJS_TEMPLATE_ID === 'template_xxxxxxx') return;
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_email: toEmail,
+      subject: subject,
+      message: message,
+      from_name: "SS H505 Task Recorder"
+    });
+  } catch (err) {
+    console.warn("Email send failed:", err);
+  }
+}
+
+const ADMIN_EMAIL = "admin@newland.com.hk"; // Change if needed; first user who registers as this becomes admin
+let currentUser = null;
+let tasks = [];
+let inbox = [];
+let users = [];
+let taskTypes = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+let announcement = 'Welcome to the SS H505 ACMV Task Recorder.';
+let programme = [];
+let progVersion = 'Rev. 7 r3';
+let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
+
+window.showAuth = function(mode) {
+  document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
+  document.getElementById('register-form').classList.toggle('hidden', mode !== 'register');
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+  document.getElementById('auth-error').textContent = '';
+};
+
+document.getElementById('login-form').onsubmit = async (e) => {
+  e.preventDefault();
+  let email = document.getElementById('login-user').value.trim();
+  if (email && !email.includes('@')) email += '@newland.com.hk';
+  const pass = document.getElementById('login-pass').value;
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (err) {
+    document.getElementById('auth-error').textContent = err.message;
+  }
+};
+
+document.getElementById('register-form').onsubmit = async (e) => {
+  e.preventDefault();
+  let email = document.getElementById('reg-user').value.trim();
+  if (email && !email.includes('@')) email += '@newland.com.hk';
+  const name = document.getElementById('reg-name').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user';
+    await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
+  } catch (err) {
+    document.getElementById('auth-error').textContent = err.message;
+  }
+};
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      currentUser = { uid: user.uid, ...userDoc.data() };
+    } else {
+      currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+      await setDoc(doc(db, 'users', user.uid), currentUser);
+    }
+    document.getElementById('auth-section').classList.add('hidden');
+    document.getElementById('app-section').classList.remove('hidden');
+    document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
+    document.getElementById('admin-perf').classList.toggle('hidden', currentUser.role !== 'admin');
+    startListeners();
+    showView('all');
+  } else {
+    currentUser = null;
+    if (unsubTasks) unsubTasks();
+    document.getElementById('auth-section').classList.remove('hidden');
+    document.getElementById('app-section').classList.add('hidden');
+  }
+});
+
+window.logout = () => signOut(auth);
+
+function startListeners() {
+  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => {
+    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  });
+  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => {
+    inbox = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    updateInboxBadge();
+    if (!document.getElementById('view-inbox').classList.contains('hidden')) renderInbox();
+  });
+  unsubUsers = onSnapshot(collection(db, 'users'), snap => {
+    users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    populateUserFilter();
+  });
+  unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
+    if (snap.exists()) {
+      const data = snap.data();
+      announcement = data.announcement || announcement;
+      taskTypes = data.taskTypes || taskTypes;
+      progVersion = data.progVersion || progVersion;
+      programme = data.programme || [];
+      renderDashboard();
+    }
+  });
+}
+
+window.showView = function(v) {
+  ['all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
+  render();
+};
+
+async function notifyUser(uid, subject, message) {
+  await addDoc(collection(db, 'inbox'), { to: uid, subject, message, date: serverTimestamp(), read: false });
+  const u = users.find(x => x.uid === uid);
+  if (u && u.email) await sendEmail(u.email, subject, message);
+}
+  data.created = serverTimestamp();
+  data.user = currentUser.uid;
+  data.comments = [];
+  await addDoc(collection(db, 'tasks'), data);
+}
+
+// Simplified render functions (expand as needed)
+function render() {
+  renderAll();
+  renderMy();
+  renderDashboard();
+}
+
+function renderAll() {
+  const list = document.getElementById('all-tasks-list');
+  if (!tasks.length) { list.innerHTML = '<p>No tasks yet.</p>'; return; }
+  let html = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>';
+  tasks.forEach(t => {
+    const u = users.find(x => x.uid === t.user) || { name: 'Unknown' };
+    html += `<tr><td>${u.name}</td><td>${t.title}</td><td>${t.targetDate||'-'}</td><td>${t.status}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  list.innerHTML = html;
+}
+
+function renderMy() {
+  document.getElementById('my-tasks-list').innerHTML = '<p>My tasks (filter by current user in full version)</p>';
+}
+
+function renderDashboard() {
+  document.getElementById('dash-content').innerHTML = `
+    <div class="dash-stat"><strong>${tasks.length}</strong>Total Tasks</div>
+    <div class="dash-stat"><strong>${tasks.filter(t=>t.status==='completed').length}</strong>Completed</div>
+  `;
+  document.getElementById('announcement-text').textContent = announcement;
+}
+
+function updateInboxBadge() {
+  const badge = document.getElementById('inbox-badge');
+  const unread = inbox.filter(m => !m.read).length;
+  badge.textContent = unread;
+  badge.classList.toggle('hidden', unread === 0);
+}
+
+function renderInbox() {
+  const el = document.getElementById('inbox-list');
+  if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
+  el.innerHTML = inbox.map(m => `<div class="inbox-item">${m.subject}<br><small>${m.message}</small></div>`).join('');
+}
+
+function populateUserFilter() {}
+
+// Seed initial settings if empty
+(async () => {
+  const settingsRef = doc(db, 'settings', 'main');
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    await setDoc(settingsRef, { announcement, taskTypes, progVersion, programme: [] });
+  }
+})();
+</script>
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder</h1>
+  <h1>SS H505 ACMV Task Recorder (Online)</h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -86,14 +282,13 @@
       <button id="tab-register" onclick="showAuth('register')">Register</button>
     </div>
     <form id="login-form">
-      <div style="margin-bottom:12px;"><label>Username</label><input type="text" id="login-user" required style="width:100%;" placeholder="email prefix only (e.g. john)"></div>
+      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="john or john@newland.com.hk"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="login-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Login</button>
     </form>
     <form id="register-form" class="hidden">
-      <div style="margin-bottom:12px;"><label>Username (email prefix only, e.g. john for john@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;" placeholder="john"></div>
+      <div style="margin-bottom:12px;"><label>Email prefix (will become name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
       <div style="margin-bottom:12px;"><label>Display Name</label><input type="text" id="reg-name" required style="width:100%;"></div>
-      <div style="margin-bottom:12px;"><label>Email (required for notifications)</label><input type="email" id="reg-email" required style="width:100%;" placeholder="john@newland.com.hk"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="reg-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Create Account</button>
     </form>
@@ -102,30 +297,10 @@
 
   <div id="app-section" class="hidden">
     <div id="dashboard" class="dashboard">
-      <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
+      <h2>Programme & Task Status</h2>
       <div id="dash-content" class="dash-stats"></div>
-      <div id="announcement-box" style="margin-top:12px; background:rgba(255,255,255,0.15); padding:10px 12px; border-radius:8px;">
-        <strong>Announcement</strong>
-        <div class="marquee-wrap">
-          <div id="announcement-text" class="marquee-text"></div>
-        </div>
-        <div id="admin-announcement" class="hidden" style="margin-top:8px;">
-          <textarea id="announcement-edit" rows="3" style="width:100%; background:white; color:#1e293b;" placeholder="Enter announcement..."></textarea>
-          <button type="button" class="small" onclick="saveAnnouncement()" style="margin-top:6px;">Save Announcement</button>
-        </div>
-      </div>
-      <div id="today-activities" style="margin-top:12px;"></div>
-      <div id="admin-prog-upload" class="hidden" style="margin-top:12px;">
-        <label style="color:white;">Update Master Programme (admin – CSV or JSON)</label>
-        <div style="margin-top:6px;">
-          <button type="button" class="small secondary" onclick="downloadProgrammeTemplate()">Download CSV Template</button>
-        </div>
-        <input type="file" id="prog-file" accept=".csv,.json,.txt" style="margin-top:8px; background:white; color:#1e293b;">
-        <button type="button" class="small" onclick="uploadProgramme()" style="margin-top:6px;">Upload & Replace</button>
-        <p style="font-size:0.8rem; opacity:0.8; margin:4px 0 0;">CSV format: activity,start,finish (YYYY-MM-DD). Use the template, fill the dates, then upload.</p>
-      </div>
+      <div class="marquee-wrap"><div id="announcement-text" class="marquee-text"></div></div>
     </div>
-
     <div class="tabs" id="main-tabs">
       <button onclick="showView('all')">All Tasks</button>
       <button onclick="showView('my')">My Tasks</button>
@@ -133,969 +308,13 @@
       <button onclick="showView('inbox')">Inbox <span id="inbox-badge" class="badge hidden">0</span></button>
       <button id="admin-perf" class="hidden" onclick="showView('perf')">Performance</button>
     </div>
-
-    <div id="view-all" class="card">
-      <h2>All Tasks</h2>
-      <div class="grid" style="margin-bottom:12px;">
-        <div><label>User</label><select id="filter-user" style="width:100%;"><option value="">All</option></select></div>
-        <div><label>Type</label><select id="filter-type" style="width:100%;"><option value="">All</option></select></div>
-        <div><label>Status</label><select id="filter-status" style="width:100%;"><option value="">All</option>
-          <option value="not-started">Not Started</option><option value="in-progress">In Progress</option>
-          <option value="completed">Completed</option><option value="overdue">Overdue</option><option value="pending">Pending Acceptance</option></select></div>
-      </div>
-      <div id="all-tasks-list"></div>
-    </div>
-
-    <div id="view-my" class="card hidden">
-      <h2>My Tasks</h2>
-      <div id="my-stats" class="summary-grid" style="margin-bottom:16px;"></div>
-      <div id="my-tasks-list"></div>
-    </div>
-
-    <div id="view-add" class="card hidden">
-      <h2 id="form-title">Add Task</h2>
-      <form id="task-form">
-        <div class="grid">
-          <div><label>Task Title *</label><input type="text" id="task-title" required style="width:100%;"></div>
-          <div><label>Type *</label>
-            <select id="task-type" required style="width:100%;"></select>
-          </div>
-          <div><label>Target Completion Date *</label><input type="date" id="task-target" required style="width:100%;"></div>
-          <div><label>Status</label>
-            <select id="task-status" style="width:100%;">
-              <option value="not-started">Not Started</option>
-              <option value="in-progress">In Progress</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
-          <div id="assign-box" class="hidden">
-            <label>Assign to</label>
-            <select id="task-assign" style="width:100%;">
-              <option value="self">Myself</option>
-              <option value="TBC">TBC (open for anyone to accept)</option>
-            </select>
-          </div>
-        </div>
-        <div id="date-change-reason" class="hidden" style="margin-top:12px;">
-          <label>Reason for changing completion date * (required – will notify admin)</label>
-          <textarea id="date-reason" rows="2" style="width:100%;" placeholder="Explain why the target date needs to change"></textarea>
-        </div>
-        <div style="margin-top:12px;"><label>Description / Notes</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
-        <div id="accept-open-box" class="hidden" style="margin-top:12px;">
-          <button type="button" class="success" onclick="acceptFromEdit()">Accept this open task as mine</button>
-        </div>
-        <div style="margin-top:12px;" class="actions">
-          <button type="submit">Save Task</button>
-          <button type="button" class="secondary" onclick="resetForm()">Clear</button>
-        </div>
-        <input type="hidden" id="edit-id">
-        <input type="hidden" id="original-date">
-      </form>
-    </div>
-
-    <div id="view-inbox" class="card hidden">
-      <h2>Inbox</h2>
-      <div id="inbox-list"></div>
-    </div>
-
-    <div id="view-settings" class="card hidden">
-      <h2>Settings</h2>
-      <h3>Change Password</h3>
-      <form id="pw-form">
-        <div style="margin-bottom:10px;"><label>Current Password</label><input type="password" id="pw-current" required style="width:100%;"></div>
-        <div style="margin-bottom:10px;"><label>New Password</label><input type="password" id="pw-new" required style="width:100%;"></div>
-        <div style="margin-bottom:10px;"><label>Confirm New Password</label><input type="password" id="pw-confirm" required style="width:100%;"></div>
-        <button type="submit">Update Password</button>
-      </form>
-      <p id="pw-msg" style="margin-top:8px;"></p>
-      <div id="admin-users" class="hidden" style="margin-top:24px;">
-        <h3>Manage Accounts (Admin)</h3>
-        <p><small>Delete any account except “admin”. Password required.</small></p>
-        <div id="users-list"></div>
-      </div>
-      <div id="admin-types" class="hidden" style="margin-top:24px;">
-        <h3>Manage Task Types (Admin)</h3>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <input type="text" id="new-type" placeholder="New type name" style="flex:1;">
-          <button type="button" onclick="addTaskType()">Add Type</button>
-        </div>
-        <div id="types-list"></div>
-      </div>
-    </div>
-
-    <div id="view-perf" class="card hidden">
-      <h2>Performance</h2>
-      <div class="tabs" style="margin-bottom:12px;">
-        <button class="active" id="perf-team-tab" onclick="showPerfTab('team')">Team</button>
-        <button id="perf-indiv-tab" onclick="showPerfTab('indiv')">Individual</button>
-      </div>
-      <div id="perf-team">
-        <h3>Team Overview</h3>
-        <div id="perf-summary" class="summary-grid" style="margin-bottom:16px;"></div>
-        <div id="perf-table"></div>
-        <h3 style="margin-top:20px;">Task Type Breakdown</h3>
-        <div id="type-breakdown"></div>
-      </div>
-      <div id="perf-indiv" class="hidden">
-        <h3>Individual Performance</h3>
-        <div class="grid" style="margin-bottom:12px;">
-          <div><label>User</label><select id="indiv-user" style="width:100%;"></select></div>
-          <div><label>From</label><input type="date" id="indiv-from" style="width:100%;"></div>
-          <div><label>To</label><input type="date" id="indiv-to" style="width:100%;"></div>
-        </div>
-        <button type="button" onclick="renderIndividual()">Search</button>
-        <div id="indiv-result" style="margin-top:16px;"></div>
-      </div>
-    </div>
+    <div id="view-all" class="card"><h2>All Tasks</h2><div id="all-tasks-list"></div></div>
+    <div id="view-my" class="card hidden"><h2>My Tasks</h2><div id="my-tasks-list"></div></div>
+    <div id="view-add" class="card hidden"><h2>Add Task</h2><p>Form will be fully wired in next update.</p></div>
+    <div id="view-inbox" class="card hidden"><h2>Inbox</h2><div id="inbox-list"></div></div>
+    <div id="view-settings" class="card hidden"><h2>Settings</h2></div>
+    <div id="view-perf" class="card hidden"><h2>Performance</h2></div>
   </div>
 </div>
-
-<script>
-const ADMIN_USER = 'admin';
-let taskTypes = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
-let users = [];
-let tasks = [];
-let inbox = [];
-let programme = [];
-let progVersion = 'Rev. 7 r3 (21 Jul 2026)';
-let announcement = '';
-let currentUser = null;
-let expandedTaskId = null;
-
-function load() {
-  users = JSON.parse(localStorage.getItem('ssh505_users') || 'null') || [
-    { username: 'admin', password: 'admin', name: 'Administrator', role: 'admin', email: 'admin@company.com' }
-  ];
-  tasks = JSON.parse(localStorage.getItem('ssh505_tasks') || '[]');
-  inbox = JSON.parse(localStorage.getItem('ssh505_inbox') || '[]');
-  taskTypes = JSON.parse(localStorage.getItem('ssh505_types') || 'null') || taskTypes;
-  announcement = localStorage.getItem('ssh505_announcement') || 'Welcome to the SS H505 ACMV Task Recorder.';
-  const savedProg = JSON.parse(localStorage.getItem('ssh505_programme') || 'null');
-  if (savedProg) {
-    programme = savedProg.activities || [];
-    progVersion = savedProg.version || progVersion;
-  } else {
-    seedProgramme();
-  }
-  if (tasks.length === 0) seedSampleTasks();
-  checkOverdueNotifications();
-  saveUsers(); saveTasks(); saveInbox(); saveProgramme(); saveTypes();
-  localStorage.setItem('ssh505_announcement', announcement);
-}
-function saveUsers() { localStorage.setItem('ssh505_users', JSON.stringify(users)); }
-function saveTasks() { localStorage.setItem('ssh505_tasks', JSON.stringify(tasks)); }
-function saveInbox() { localStorage.setItem('ssh505_inbox', JSON.stringify(inbox)); }
-function saveTypes() { localStorage.setItem('ssh505_types', JSON.stringify(taskTypes)); }
-function saveProgramme() { localStorage.setItem('ssh505_programme', JSON.stringify({ version: progVersion, activities: programme })); }
-function saveAnnouncement() {
-  if (!isAdmin()) return;
-  announcement = document.getElementById('announcement-edit').value.trim();
-  localStorage.setItem('ssh505_announcement', announcement);
-  renderDashboard();
-  alert('Announcement saved.');
-}
-
-function seedProgramme() {
-  // Sample activities from Master Programme Rev.7 r3 context
-  programme = [
-    { activity: 'Access / Start on site', start: '2025-05-12', finish: '2025-05-12' },
-    { activity: 'Shop drawing schedule Annex C (ACMV)', start: '2026-08-17', finish: '2026-09-15' },
-    { activity: '1st AIP resubmission L8 layout', start: '2026-09-30', finish: '2026-10-15' },
-    { activity: 'Conceal conduit installation detail TA&P', start: '2027-03-01', finish: '2027-04-02' },
-    { activity: 'BW drawing pour release preparation', start: '2026-11-01', finish: '2026-12-10' },
-    { activity: 'Contract completion', start: '2029-02-09', finish: '2029-02-09' }
-  ];
-}
-
-function seedSampleTasks() {
-  const samples = [
-    { title: 'Conceal conduit installation detail (pour gate)', type: 'Drawing submission', target: '2027-04-02', status: 'not-started', desc: 'Must be approved before conduit is cast in slab. TA&P target from schedule.' },
-    { title: '8/F ACMV layout shop drawing (AHU-08-01/02 + PAU-08-01)', type: 'Drawing submission', target: '2026-11-30', status: 'in-progress', desc: '1st AIP resubmission basis. Terminals: VAV, VAV-EH, venturi, VRV, OAPU.' },
-    { title: 'Material submission – CHW pipes & insulation', type: 'Material Submission', target: '2026-12-15', status: 'not-started', desc: 'For AHU connection on 8/F.' },
-    { title: 'Cooling load calculation – procedure rooms (15 ACH, 100% OA)', type: 'Calculation', target: '2026-11-20', status: 'not-started', desc: 'Confirm against FB Part I P&T. Chest Clinic rules are 15/F only.' },
-    { title: 'Coordination with EL – PABX/TR 24h AC', type: 'Coordination', target: '2026-12-01', status: 'not-started', desc: 'EL is ventilation only; PABX/TR needs continuous AC.' },
-    { title: 'BS1 Clause D Contractor’s Submission list update', type: 'Document submission', target: '2026-11-25', status: 'completed', desc: 'Saved in project artifacts.' },
-    { title: 'BW drawing – pour release package', type: 'Drawing submission', target: '2026-12-10', status: 'not-started', desc: 'Layout TA&P + 3 days + 28 days JRP & ITAP. Pour release = approved BW drawing.' },
-    { title: 'Pipe / duct / equipment installation details (BWIC gate)', type: 'Drawing submission', target: '2027-01-15', status: 'not-started', desc: 'BWIC gate, not pour gate. MiC details outside ACMV scope.' }
-  ];
-  samples.forEach((s, i) => {
-    tasks.push({
-      id: 'sample-' + i, user: 'admin', title: s.title, type: s.type, description: s.desc,
-      targetDate: s.target, status: s.status, created: new Date().toISOString(),
-      comments: [], score: s.status === 'completed' ? 4 : null,
-      actualDate: s.status === 'completed' ? '2026-11-09' : null,
-      acceptance: 'accepted', assignedBy: 'admin'
-    });
-  });
-}
-
-function checkOverdueNotifications() {
-  const todayStr = today();
-  tasks.forEach(t => {
-    if (t.status === 'completed' || !t.targetDate || t.targetDate >= todayStr || t.acceptance === 'pending') return;
-    if (inbox.some(m => m.taskId === t.id && m.subject.includes('Overdue') && m.date.slice(0,10) === todayStr)) return;
-    const owner = users.find(u => u.username === t.user);
-    const ownerName = owner ? owner.name : t.user;
-    const msg = `Task "${t.title}" is overdue (target was ${t.targetDate}). Please update status or request a new date.`;
-    if (t.user) addInboxMessage(t.user, 'system', 'Overdue task: ' + t.title, msg, t.id);
-    if (t.user !== ADMIN_USER) {
-      addInboxMessage(ADMIN_USER, 'system', 'Overdue task (admin notice): ' + t.title, `${ownerName}'s task is overdue. ${msg}`, t.id);
-    }
-  });
-}
-
-function showAuth(mode) {
-  document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
-  document.getElementById('register-form').classList.toggle('hidden', mode !== 'register');
-  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
-  document.getElementById('tab-register').classList.toggle('active', mode === 'register');
-  document.getElementById('auth-error').textContent = '';
-}
-
-document.getElementById('login-form').onsubmit = function(e) {
-  e.preventDefault();
-  let u = document.getElementById('login-user').value.trim();
-  if (u && !u.includes('@') && u.toLowerCase() !== 'admin') u = u + '@newland.com.hk';
-  const p = document.getElementById('login-pass').value;
-  const user = users.find(x => x.username === u && x.password === p);
-  if (!user) { document.getElementById('auth-error').textContent = 'Invalid username or password'; return; }
-  login(user);
-};
-
-document.getElementById('register-form').onsubmit = function(e) {
-  e.preventDefault();
-  let username = document.getElementById('reg-user').value.trim();
-  if (username && !username.includes('@')) username = username + '@newland.com.hk';
-  const name = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const password = document.getElementById('reg-pass').value;
-  if (users.some(u => u.username === username)) {
-    document.getElementById('auth-error').textContent = 'Username already exists'; return;
-  }
-  if (users.length >= 50) { document.getElementById('auth-error').textContent = 'Team limit of 50 reached'; return; }
-  users.push({ username, password, name, email, role: 'user' });
-  saveUsers();
-  login(users[users.length-1]);
-};
-
-function login(user) {
-  currentUser = user;
-  document.getElementById('auth-section').classList.add('hidden');
-  document.getElementById('app-section').classList.remove('hidden');
-  document.getElementById('user-info').innerHTML = `<span class="account-name" onclick="showView('settings')">${user.name}</span> <button onclick="logout()" class="secondary small">Logout</button>`;
-  document.getElementById('admin-perf').classList.toggle('hidden', !isAdmin());
-  document.getElementById('admin-users').classList.toggle('hidden', !isAdmin());
-  document.getElementById('admin-types').classList.toggle('hidden', !isAdmin());
-  document.getElementById('assign-box').classList.toggle('hidden', !isAdmin());
-  document.getElementById('admin-prog-upload').classList.toggle('hidden', !isAdmin());
-  document.getElementById('admin-announcement').classList.toggle('hidden', !isAdmin());
-  populateAssignSelect();
-  populateTypeSelects();
-  populateUserFilter();
-  // Reset filters on login so the full list is visible
-  ['filter-user','filter-type','filter-status'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  showView('all');
-  render();
-  updateInboxBadge();
-}
-
-function logout() {
-  currentUser = null;
-  document.getElementById('user-info').innerHTML = '';
-  document.getElementById('auth-section').classList.remove('hidden');
-  document.getElementById('app-section').classList.add('hidden');
-  document.getElementById('login-user').value = '';
-  document.getElementById('login-pass').value = '';
-  document.getElementById('auth-error').textContent = '';
-  expandedTaskId = null;
-  showAuth('login');
-}
-
-function showView(v) {
-  ['all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
-  document.querySelectorAll('#main-tabs button').forEach(b => b.classList.remove('active'));
-  const map = { all:0, my:1, add:2, inbox:3, perf:4 };
-  const btns = document.querySelectorAll('#main-tabs button');
-  if (btns[map[v]]) btns[map[v]].classList.add('active');
-  if (v === 'inbox') markInboxRead();
-  if (v === 'settings') { renderUsers(); renderTypesList(); }
-  expandedTaskId = null;
-  render();
-}
-
-function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
-
-document.getElementById('task-target').onchange = checkDateChange;
-function checkDateChange() {
-  const id = document.getElementById('edit-id').value;
-  const orig = document.getElementById('original-date').value;
-  const neu = document.getElementById('task-target').value;
-  const reasonBox = document.getElementById('date-change-reason');
-  // Only show reason when editing an existing task and the date is actually changed
-  if (id && orig && neu && orig !== neu) {
-    reasonBox.classList.remove('hidden');
-    document.getElementById('date-reason').required = true;
-  } else {
-    reasonBox.classList.add('hidden');
-    document.getElementById('date-reason').required = false;
-  }
-}
-
-function populateAssignSelect() {
-  const sel = document.getElementById('task-assign');
-  sel.innerHTML = '<option value="self">Myself</option><option value="TBC">TBC (open for anyone to accept)</option>';
-  users.filter(u => u.username !== currentUser.username).forEach(u => {
-    sel.innerHTML += `<option value="${u.username}">${escape(u.name)} (${u.username})</option>`;
-  });
-}
-function populateTypeSelects() {
-  const opts = taskTypes.map(t => `<option value="${escape(t)}">${escape(t)}</option>`).join('');
-  const formSel = document.getElementById('task-type');
-  const filterSel = document.getElementById('filter-type');
-  if (formSel) formSel.innerHTML = opts;
-  if (filterSel) filterSel.innerHTML = '<option value="">All</option>' + opts;
-}
-function addTaskType() {
-  if (!isAdmin()) return;
-  const name = document.getElementById('new-type').value.trim();
-  if (!name) return;
-  if (taskTypes.includes(name)) { alert('Type already exists'); return; }
-  taskTypes.push(name);
-  saveTypes();
-  populateTypeSelects();
-  renderTypesList();
-  document.getElementById('new-type').value = '';
-  alert('Type added');
-}
-function renderTypesList() {
-  if (!isAdmin()) return;
-  const el = document.getElementById('types-list');
-  if (!el) return;
-  el.innerHTML = taskTypes.map(t => `<div style="padding:4px 0; border-bottom:1px solid #eee;">${escape(t)}</div>`).join('') || '<p>No types</p>';
-}
-
-document.getElementById('task-form').onsubmit = function(e) {
-  e.preventDefault();
-  const id = document.getElementById('edit-id').value;
-  const newDate = document.getElementById('task-target').value;
-  const reason = document.getElementById('date-reason').value.trim();
-  const assignVal = isAdmin() ? document.getElementById('task-assign').value : 'self';
-  let targetUser = currentUser.username;
-  let acceptance = 'accepted';
-  if (assignVal === 'TBC') {
-    targetUser = null;
-    acceptance = 'open';
-  } else if (assignVal !== 'self') {
-    targetUser = assignVal;
-    acceptance = 'pending';
-  }
-  const data = {
-    title: document.getElementById('task-title').value.trim(),
-    type: document.getElementById('task-type').value,
-    description: document.getElementById('task-desc').value.trim(),
-    targetDate: newDate,
-    status: document.getElementById('task-status').value,
-    user: targetUser,
-    created: new Date().toISOString(),
-    acceptance,
-    assignedBy: currentUser.username
-  };
-  if (id) {
-    const t = tasks.find(x => x.id === id);
-    if (t && (t.user === currentUser.username || isAdmin() || t.acceptance === 'open' || t.acceptance === 'rejected')) {
-      const oldStatus = t.status;
-      const oldUser = t.user;
-      const oldAcceptance = t.acceptance;
-      if (t.targetDate && t.targetDate !== newDate && !isAdmin()) {
-        if (!reason) { alert('Please explain the reason for changing the completion date.'); return; }
-        addInboxMessage(ADMIN_USER, currentUser.username, 'Date change request: ' + t.title,
-          `User ${currentUser.name} requests to change target date from ${t.targetDate} to ${newDate}.\nReason: ${reason}`, t.id);
-      }
-      Object.assign(t, data);
-      if (data.status === 'completed' && !t.actualDate) t.actualDate = today();
-      // Notify admin of status change by non-admin
-      if (!isAdmin() && oldStatus !== data.status) {
-        addInboxMessage(ADMIN_USER, currentUser.username, 'Status changed: ' + t.title,
-          `${currentUser.name} changed status from "${oldStatus}" to "${data.status}".`, t.id);
-        if (data.status === 'completed') {
-          addInboxMessage(ADMIN_USER, currentUser.username, 'Task completed – please score: ' + t.title,
-            `${currentUser.name} marked the task as Completed. Please score it (1–5).`, t.id);
-        }
-      }
-      // Notify new assignee when admin re-assigns a rejected/open task
-      if (isAdmin() && acceptance === 'pending' && targetUser && (oldAcceptance === 'rejected' || oldAcceptance === 'open' || oldUser !== targetUser)) {
-        addInboxMessage(targetUser, currentUser.username, 'Task assigned to you: ' + t.title,
-          `Admin assigned this task to you. Please accept or reject.\nTarget: ${t.targetDate}\n${t.description || ''}`, t.id);
-        const u = users.find(x => x.username === targetUser);
-        if (u && u.email) addInboxMessage(targetUser, 'system', 'Email notification sent', `Notification also sent to ${u.email}`, t.id);
-      }
-    }
-  } else {
-    data.id = generateId();
-    data.comments = []; data.score = null;
-    data.actualDate = data.status === 'completed' ? today() : null;
-    tasks.push(data);
-    if (acceptance === 'pending' && targetUser) {
-      const u = users.find(x => x.username === targetUser);
-      addInboxMessage(targetUser, currentUser.username, 'Task assigned to you: ' + data.title,
-        `Admin assigned a new task. Please accept or reject.\nTarget: ${data.targetDate}\n${data.description || ''}\n\nUse the buttons below or open the task in All Tasks.`, data.id);
-      if (u && u.email) {
-        addInboxMessage(targetUser, 'system', 'Email notification sent', `Notification also sent to ${u.email}`, data.id);
-      }
-    } else if (acceptance === 'open') {
-      users.filter(u => u.role !== 'admin').forEach(u => {
-        addInboxMessage(u.username, currentUser.username, 'Open task available (TBC): ' + data.title,
-          `Admin created an open task for anyone to accept.\nTarget: ${data.targetDate}`, data.id);
-      });
-    }
-  }
-  saveTasks();
-  resetForm();
-  showView('all');
-  render();
-};
-
-function resetForm() {
-  document.getElementById('task-form').reset();
-  document.getElementById('edit-id').value = '';
-  document.getElementById('original-date').value = '';
-  document.getElementById('date-change-reason').classList.add('hidden');
-  document.getElementById('date-reason').required = false;
-  document.getElementById('accept-open-box').classList.add('hidden');
-  document.getElementById('form-title').textContent = 'Add Task';
-  if (isAdmin()) populateAssignSelect();
-}
-
-function editTask(id) {
-  const t = tasks.find(x => x.id === id);
-  if (!t) return;
-  const canEdit = t.user === currentUser.username || isAdmin() || t.acceptance === 'open' || t.acceptance === 'rejected';
-  if (!canEdit) return;
-  document.getElementById('task-title').value = t.title;
-  document.getElementById('task-type').value = t.type;
-  document.getElementById('task-desc').value = t.description || '';
-  document.getElementById('task-target').value = t.targetDate;
-  document.getElementById('original-date').value = t.targetDate || '';
-  document.getElementById('task-status').value = t.status;
-  document.getElementById('edit-id').value = id;
-  document.getElementById('form-title').textContent = t.acceptance === 'open' ? 'Open Task – Accept or View' : 'Edit Task';
-  document.getElementById('accept-open-box').classList.toggle('hidden', t.acceptance !== 'open' || isAdmin());
-  checkDateChange();
-  showView('add');
-}
-
-function acceptFromEdit() {
-  const id = document.getElementById('edit-id').value;
-  if (id) acceptTask(id);
-}
-
-function deleteTask(id) {
-  if (!confirm('Delete this task?')) return;
-  tasks = tasks.filter(t => t.id !== id || (t.user !== currentUser.username && !isAdmin()));
-  saveTasks();
-  expandedTaskId = null;
-  render();
-}
-
-function toggleTaskDetail(id) {
-  expandedTaskId = (expandedTaskId === id) ? null : id;
-  render();
-}
-
-function markCompleted(id) {
-  const t = tasks.find(x => x.id === id);
-  if (!t || t.user !== currentUser.username || t.status === 'completed') return;
-  if (!confirm('Mark this task as Completed?')) return;
-  const oldStatus = t.status;
-  t.status = 'completed';
-  if (!t.actualDate) t.actualDate = today();
-  addInboxMessage(ADMIN_USER, currentUser.username, 'Task completed – please score: ' + t.title,
-    `${currentUser.name} marked the task as Completed. Please score it (1–5).`, id);
-  saveTasks();
-  render();
-}
-
-function acceptTask(id) {
-  const t = tasks.find(x => x.id === id);
-  if (!t) return;
-  if (t.acceptance === 'open' || (t.acceptance === 'pending' && t.user === currentUser.username)) {
-    t.user = currentUser.username;
-    t.acceptance = 'accepted';
-    if (t.status === 'not-started' || !t.status) t.status = 'in-progress';
-    addInboxMessage(ADMIN_USER, currentUser.username, 'Task accepted: ' + t.title, `${currentUser.name} accepted the task. Status set to In Progress.`, id);
-    saveTasks();
-    resetForm();
-    showView('all');
-    render();
-  }
-}
-
-function rejectTask(id) {
-  const t = tasks.find(x => x.id === id);
-  if (!t || t.user !== currentUser.username || t.acceptance !== 'pending') return;
-  const reason = prompt('Please explain why you are rejecting this task:');
-  if (!reason) return;
-  t.acceptance = 'rejected';
-  t.user = null;
-  addInboxMessage(ADMIN_USER, currentUser.username, 'Task rejected: ' + t.title, `${currentUser.name} rejected the task.\nReason: ${reason}`, id);
-  saveTasks();
-  render();
-}
-
-function addComment(taskId) {
-  if (!isAdmin()) return;
-  const text = prompt('Admin comment:');
-  if (!text) return;
-  const t = tasks.find(x => x.id === taskId);
-  if (t) {
-    if (!t.comments) t.comments = [];
-    t.comments.push({ by: currentUser.name || currentUser.username, text, date: new Date().toISOString() });
-    if (t.user) addInboxMessage(t.user, currentUser.username, 'Comment on: ' + t.title, text, taskId);
-    saveTasks();
-    render();
-  }
-}
-
-function setScore(taskId) {
-  if (!isAdmin()) return;
-  const s = prompt('Score 1–5 (blank to clear):');
-  if (s === null) return;
-  const num = s.trim() === '' ? null : Math.max(1, Math.min(5, parseInt(s, 10)));
-  const t = tasks.find(x => x.id === taskId);
-  if (t) {
-    t.score = (isNaN(num) || num === null) ? null : num;
-    if (num && t.user && num === 5) addInboxMessage(t.user, currentUser.username, 'Well Done: ' + t.title, `Congratulations! Your task received Well Done.`, taskId);
-    saveTasks();
-    render();
-  }
-}
-
-function addInboxMessage(toUser, fromUser, subject, body, taskId) {
-  if (!toUser) return;
-  inbox.push({ id: generateId(), to: toUser, from: fromUser, subject, body, date: new Date().toISOString(), read: false, taskId: taskId || null });
-  saveInbox();
-  if (currentUser && currentUser.username === toUser) updateInboxBadge();
-}
-
-function deleteInboxMessage(id) {
-  inbox = inbox.filter(m => m.id !== id || m.to !== currentUser.username);
-  saveInbox();
-  renderInbox();
-  updateInboxBadge();
-}
-
-function updateInboxBadge() {
-  if (!currentUser) return;
-  const unread = inbox.filter(m => m.to === currentUser.username && !m.read).length;
-  const badge = document.getElementById('inbox-badge');
-  if (unread > 0) { badge.textContent = unread; badge.classList.remove('hidden'); }
-  else badge.classList.add('hidden');
-}
-
-function markInboxRead() {
-  let changed = false;
-  inbox.forEach(m => { if (m.to === currentUser.username && !m.read) { m.read = true; changed = true; } });
-  if (changed) saveInbox();
-  updateInboxBadge();
-}
-
-function isAdmin() { return currentUser && (currentUser.role === 'admin' || currentUser.username === ADMIN_USER); }
-function scoreLabel(score) {
-  if (score == null) return '-';
-  if (score <= 2) return 'Improvement Required';
-  if (score <= 4) return 'Satisfied';
-  return 'Well Done';
-}
-function today() { return new Date().toISOString().slice(0,10); }
-function isOverdue(t) { return t.status !== 'completed' && t.targetDate && t.targetDate < today() && t.acceptance !== 'pending'; }
-function daysUntil(dateStr) { return dateStr ? Math.round((new Date(dateStr) - new Date(today())) / 86400000) : null; }
-function escape(s) { return String(s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-function statusHtml(t) {
-  if (t.acceptance === 'pending') return '<span class="status pending clickable-status" onclick="editTask(\''+t.id+'\')">Pending Accept</span>';
-  if (t.acceptance === 'open') return '<span class="status pending clickable-status" onclick="editTask(\''+t.id+'\')">TBC / Open</span>';
-  if (isOverdue(t)) return '<span class="status overdue">Overdue</span>';
-  return `<span class="status ${t.status}">${t.status.replace('-',' ')}</span>`;
-}
-
-function detailHtml(t) {
-  const u = users.find(x => x.username === t.user);
-  const canEdit = (t.user === currentUser.username || isAdmin() || t.acceptance === 'open');
-  const scoreLine = (t.score != null && isAdmin())
-    ? `<p><strong>Score:</strong> <span class="score">${t.score}/5 – ${scoreLabel(t.score)}</span></p>`
-    : '';
-  const acceptLine = (t.acceptance === 'pending' && t.user === currentUser.username)
-    ? `<div class="actions"><button class="small success" onclick="acceptTask('${t.id}')">Accept</button><button class="small danger" onclick="rejectTask('${t.id}')">Reject</button></div>`
-    : (t.acceptance === 'open' ? `<div class="actions"><button class="small success" onclick="acceptTask('${t.id}')">Accept this open task</button></div>` : '');
-  let html = `<strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type)}</span><br>
-    <small>Owner: ${t.user ? escape(u ? u.name : t.user) : 'TBC / Open'} · Created: ${(t.created||'').slice(0,10)} · Target: ${t.targetDate || '-'} ${t.actualDate ? `(Done: ${t.actualDate})` : ''}</small><br>
-    <p style="margin:8px 0;">${escape(t.description || '')}</p>
-    ${scoreLine}
-    ${acceptLine}
-    ${(t.comments||[]).map(c => `<div class="comment"><b>${escape(c.by)}</b> (${c.date.slice(0,10)}): ${escape(c.text)}</div>`).join('')}
-    <div class="actions" style="margin-top:8px;">`;
-  if (canEdit && t.acceptance !== 'pending') {
-    html += `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>`;
-    if (t.user === currentUser.username && t.status !== 'completed') {
-      html += `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>`;
-    }
-  }
-  if ((t.user === currentUser.username || isAdmin()) && t.acceptance !== 'pending') {
-    html += `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>`;
-  }
-  if (isAdmin()) {
-    html += `<button class="small" onclick="addComment('${t.id}')">Comment</button>
-             <button class="small secondary" onclick="setScore('${t.id}')">Score</button>`;
-  }
-  html += `<button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button></div>`;
-  return html;
-}
-
-function renderDashboard() {
-  const total = tasks.length;
-  const completed = tasks.filter(t => t.status === 'completed').length;
-  const open = total - completed;
-  const overdue = tasks.filter(isOverdue).length;
-  const pending = tasks.filter(t => t.acceptance === 'pending' || t.acceptance === 'open').length;
-  const start = new Date('2025-05-12');
-  const end = new Date('2029-02-09');
-  const now = new Date();
-  const totalDays = Math.round((end - start) / 86400000);
-  const passedDays = Math.max(0, Math.round((now - start) / 86400000));
-  const prog = Math.min(100, Math.max(0, Math.round(passedDays / totalDays * 100)));
-  document.getElementById('prog-version').textContent = '· ' + progVersion;
-  document.getElementById('dash-content').innerHTML = `
-    <div class="dash-stat"><strong>${prog}%</strong>Programme elapsed<br><small>${passedDays} / ${totalDays} days</small></div>
-    <div class="dash-stat"><strong>${completed}</strong>Completed tasks</div>
-    <div class="dash-stat"><strong>${open}</strong>Non-completed</div>
-    <div class="dash-stat"><strong>${overdue}</strong>Overdue</div>
-    <div class="dash-stat"><strong>${pending}</strong>Pending / TBC</div>
-  `;
-  document.getElementById('announcement-text').textContent = announcement || '(No announcement)';
-  const editBox = document.getElementById('announcement-edit');
-  if (editBox && isAdmin()) editBox.value = announcement;
-  const todayStr = today();
-  const active = programme.filter(a => a.start <= todayStr && a.finish >= todayStr);
-  const upcoming = programme.filter(a => a.start > todayStr && a.start <= new Date(Date.now()+14*86400000).toISOString().slice(0,10));
-  let actHtml = '<strong>Activities on this date:</strong>';
-  if (active.length) {
-    active.forEach(a => actHtml += `<div class="prog-activity">${escape(a.activity)} (${a.start} – ${a.finish})</div>`);
-  } else {
-    actHtml += '<div class="prog-activity">No programme activities exactly on today.</div>';
-  }
-  if (upcoming.length) {
-    actHtml += '<strong style="display:block; margin-top:8px;">Upcoming (next 14 days):</strong>';
-    upcoming.slice(0,5).forEach(a => actHtml += `<div class="prog-activity">${escape(a.activity)} starts ${a.start}</div>`);
-  }
-  document.getElementById('today-activities').innerHTML = actHtml;
-}
-
-function downloadProgrammeTemplate() {
-  if (!isAdmin()) return;
-  const header = 'activity,start,finish';
-  const sample = [
-    'Access / Start on site,2025-05-12,2025-05-12',
-    'Shop drawing schedule Annex C (ACMV),2026-08-17,2026-09-15',
-    '1st AIP resubmission L8 layout,2026-09-30,2026-10-15',
-    'Conceal conduit installation detail TA&P,2027-03-01,2027-04-02',
-    'BW drawing pour release preparation,2026-11-01,2026-12-10',
-    'Contract completion,2029-02-09,2029-02-09'
-  ];
-  const csv = header + '\n' + sample.join('\n') + '\n';
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'SS_H505_Master_Programme_Template.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function uploadProgramme() {
-  if (!isAdmin()) return;
-  const file = document.getElementById('prog-file').files[0];
-  if (!file) { alert('Please select a file'); return; }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const text = e.target.result;
-      let acts = [];
-      let version = progVersion;
-      if (file.name.endsWith('.json')) {
-        const obj = JSON.parse(text);
-        acts = obj.activities || obj;
-        version = obj.version || file.name;
-      } else {
-        // CSV: activity,start,finish
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        const header = lines[0].toLowerCase();
-        const startIdx = header.includes('start') ? 1 : 1;
-        lines.slice(header.includes('activity') ? 1 : 0).forEach(line => {
-          const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g,''));
-          if (parts.length >= 3 && parts[1] && parts[2]) {
-            acts.push({ activity: parts[0], start: parts[1], finish: parts[2] });
-          }
-        });
-        version = file.name.replace(/\.[^.]+$/, '');
-      }
-      if (!acts.length) { alert('No valid activities found'); return; }
-      programme = acts;
-      progVersion = version;
-      saveProgramme();
-      renderDashboard();
-      alert('Master Programme updated to ' + version);
-      document.getElementById('prog-file').value = '';
-    } catch (err) {
-      alert('Failed to parse file: ' + err.message);
-    }
-  };
-  reader.readAsText(file);
-}
-
-function renderAll() {
-  const uf = document.getElementById('filter-user').value;
-  const tf = document.getElementById('filter-type').value;
-  const sf = document.getElementById('filter-status').value;
-  let list = tasks.slice();
-  if (uf) list = list.filter(t => t.user === uf);
-  if (tf) list = list.filter(t => t.type === tf);
-  if (sf === 'overdue') list = list.filter(isOverdue);
-  else if (sf === 'pending') list = list.filter(t => t.acceptance === 'pending' || t.acceptance === 'open');
-  else if (sf) list = list.filter(t => t.status === sf);
-  list.sort((a,b) => (a.targetDate||'').localeCompare(b.targetDate||''));
-  if (!list.length) { document.getElementById('all-tasks-list').innerHTML = '<p>No matching tasks.</p>'; return; }
-  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
-  list.forEach(t => {
-    const u = users.find(x => x.username === t.user);
-    html += `<tr>
-      <td>${t.user ? escape(u ? u.name : t.user) : 'TBC'}</td>
-      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type)}</span><br>
-        <small>${escape(t.description||'').slice(0,70)}${(t.description||'').length>70?'…':''}</small>
-      </td>
-      <td>${t.targetDate||'-'}</td>
-      <td>${statusHtml(t)}</td>
-      <td>
-        ${(t.user === currentUser.username && t.status !== 'completed' && t.acceptance !== 'pending')
-          ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>`
-          : ''}
-      </td>
-      ${isAdmin() ? `<td>${t.score != null ? '<span class="score">'+t.score+'/5<br><small>'+scoreLabel(t.score)+'</small></span>' : '-'}</td>` : ''}
-    </tr>`;
-    if (expandedTaskId === t.id) {
-      html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">${detailHtml(t)}</td></tr>`;
-    }
-  });
-  html += '</tbody></table></div>';
-  document.getElementById('all-tasks-list').innerHTML = html;
-}
-
-function renderMy() {
-  const mine = tasks.filter(t => t.user === currentUser.username || t.acceptance === 'open');
-  const open = mine.filter(t => t.status !== 'completed').length;
-  const overdue = mine.filter(isOverdue).length;
-  const upcoming = mine.filter(t => t.status !== 'completed' && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 7);
-  document.getElementById('my-stats').innerHTML = `
-    <div class="stat"><strong>${mine.filter(t=>t.user===currentUser.username).length}</strong>Mine</div>
-    <div class="stat"><strong>${open}</strong>Open</div>
-    <div class="stat"><strong>${overdue}</strong>Overdue</div>
-    <div class="stat"><strong>${upcoming.length}</strong>Due ≤7d</div>`;
-  if (!mine.length) { document.getElementById('my-tasks-list').innerHTML = '<p>No tasks yet.</p>'; return; }
-  let html = `<div class="table-wrap"><table><thead><tr><th>Task</th><th>Created</th><th>Target</th><th>Status</th></tr></thead><tbody>`;
-  mine.sort((a,b) => (a.targetDate||'').localeCompare(b.targetDate||'')).forEach(t => {
-    const d = daysUntil(t.targetDate);
-    const dueClass = d !== null && d <= 7 && t.status !== 'completed' ? 'upcoming' : '';
-    html += `<tr>
-      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type)}</span>${t.acceptance==='open'?' <small>(Open)</small>':''}</td>
-      <td>${(t.created||'').slice(0,10)}</td>
-      <td class="${dueClass}">${t.targetDate||'-'}${d !== null && t.status !== 'completed' ? `<br><small>${d < 0 ? Math.abs(d)+'d overdue' : d+'d left'}</small>` : ''}</td>
-      <td>${statusHtml(t)}</td>
-    </tr>`;
-    if (expandedTaskId === t.id) {
-      html += `<tr class="detail-row"><td colspan="4">${detailHtml(t)}</td></tr>`;
-    }
-  });
-  html += '</tbody></table></div>';
-  document.getElementById('my-tasks-list').innerHTML = html;
-}
-
-function renderInbox() {
-  const mine = inbox.filter(m => m.to === currentUser.username).sort((a,b) => b.date.localeCompare(a.date));
-  if (!mine.length) { document.getElementById('inbox-list').innerHTML = '<p>No messages.</p>'; return; }
-  let html = '';
-  mine.forEach(m => {
-    const fromUser = users.find(u => u.username === m.from) || { name: m.from };
-    let actions = `<button class="small danger" onclick="deleteInboxMessage('${m.id}')">Delete</button>`;
-    // Accept / Reject buttons for assignment messages if still pending for this user
-    if (m.taskId && m.subject.startsWith('Task assigned to you')) {
-      const t = tasks.find(x => x.id === m.taskId);
-      if (t && t.acceptance === 'pending' && t.user === currentUser.username) {
-        actions = `<div class="actions">
-          <button class="small success" onclick="acceptTask('${t.id}')">Accept</button>
-          <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>
-          <button class="small secondary" onclick="deleteInboxMessage('${m.id}')">Delete</button>
-        </div>`;
-      }
-    }
-    html += `<div class="inbox-item ${m.read ? '' : 'unread'}">
-      <div>
-        <strong>${escape(m.subject)}</strong><br>
-        <small>From: ${escape(fromUser.name)} · ${m.date.slice(0,16).replace('T',' ')}</small>
-        <p style="margin:8px 0 0;">${escape(m.body).replace(/\n/g,'<br>')}</p>
-      </div>
-      ${actions}
-    </div>`;
-  });
-  document.getElementById('inbox-list').innerHTML = html;
-}
-
-function showPerfTab(tab) {
-  document.getElementById('perf-team').classList.toggle('hidden', tab !== 'team');
-  document.getElementById('perf-indiv').classList.toggle('hidden', tab !== 'indiv');
-  document.getElementById('perf-team-tab').classList.toggle('active', tab === 'team');
-  document.getElementById('perf-indiv-tab').classList.toggle('active', tab === 'indiv');
-  if (tab === 'indiv') populateIndivUsers();
-}
-
-function populateIndivUsers() {
-  const sel = document.getElementById('indiv-user');
-  if (!sel) return;
-  sel.innerHTML = users.filter(u => u.username !== 'admin').map(u => `<option value="${u.username}">${escape(u.name)}</option>`).join('');
-}
-
-function renderIndividual() {
-  const username = document.getElementById('indiv-user').value;
-  const from = document.getElementById('indiv-from').value;
-  const to = document.getElementById('indiv-to').value;
-  if (!username) { document.getElementById('indiv-result').innerHTML = '<p>Select a user.</p>'; return; }
-  const u = users.find(x => x.username === username);
-  let list = tasks.filter(t => t.user === username);
-  if (from) list = list.filter(t => (t.actualDate || t.created || '').slice(0,10) >= from);
-  if (to) list = list.filter(t => (t.actualDate || t.created || '').slice(0,10) <= to);
-  const completed = list.filter(t => t.status === 'completed');
-  const scored = completed.filter(t => t.score != null);
-  const avg = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
-  let html = `<h4>${escape(u ? u.name : username)} – ${list.length} tasks in period</h4>
-    <p>Completed: ${completed.length} · Avg score: ${avg}</p>
-    <div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Completed</th><th>Score</th></tr></thead><tbody>`;
-  list.forEach(t => {
-    html += `<tr><td>${escape(t.title)}</td><td>${t.targetDate||'-'}</td><td>${t.actualDate||'-'}</td><td>${t.score != null ? t.score+'/5 – '+scoreLabel(t.score) : '-'}</td></tr>`;
-  });
-  html += '</tbody></table></div>';
-  document.getElementById('indiv-result').innerHTML = html || '<p>No tasks in this period.</p>';
-}
-
-function renderPerf() {
-  if (!isAdmin()) return;
-  const userMap = {};
-  users.filter(u => u.username !== 'admin').forEach(u => {
-    userMap[u.username] = { name: u.name, total: 0, completed: 0, overdue: 0, scores: [], onTime: 0 };
-  });
-  tasks.forEach(t => {
-    if (!t.user || !userMap[t.user]) return;
-    const b = userMap[t.user];
-    b.total++;
-    if (t.status === 'completed') {
-      b.completed++;
-      if (t.actualDate && t.targetDate && t.actualDate <= t.targetDate) b.onTime++;
-    }
-    if (isOverdue(t)) b.overdue++;
-    if (t.score != null) b.scores.push(t.score);
-  });
-  const arr = Object.values(userMap);
-  const totalTasks = tasks.length;
-  const totalCompleted = tasks.filter(t => t.status === 'completed').length;
-  const scored = tasks.filter(t => t.score != null);
-  const avgScore = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
-  document.getElementById('perf-summary').innerHTML = `
-    <div class="stat"><strong>${users.length - 1}</strong>Users</div>
-    <div class="stat"><strong>${totalTasks}</strong>Tasks</div>
-    <div class="stat"><strong>${totalCompleted}</strong>Completed</div>
-    <div class="stat"><strong>${avgScore}</strong>Avg score</div>`;
-  let html = `<div class="table-wrap"><table><thead><tr><th>Teammate</th><th>Tasks</th><th>Completed</th><th>On-time</th><th>Overdue</th><th>Avg Score</th></tr></thead><tbody>`;
-  arr.sort((a,b) => b.total - a.total).forEach(b => {
-    const avg = b.scores.length ? (b.scores.reduce((a,c)=>a+c,0)/b.scores.length).toFixed(1) : '-';
-    const onTimePct = b.completed ? Math.round(b.onTime / b.completed * 100) + '%' : '-';
-    html += `<tr><td>${escape(b.name)}</td><td>${b.total}</td><td>${b.completed}</td><td>${onTimePct}</td><td>${b.overdue}</td><td>${avg}</td></tr>`;
-  });
-  html += '</tbody></table></div>';
-  document.getElementById('perf-table').innerHTML = html || '<p>No data.</p>';
-
-  const typeCount = {};
-  taskTypes.forEach(t => typeCount[t] = 0);
-  tasks.forEach(t => { if (typeCount[t.type] !== undefined) typeCount[t.type]++; });
-  let th = '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>';
-  taskTypes.forEach(t => th += `<tr><td>${escape(t)}</td><td>${typeCount[t]}</td></tr>`);
-  th += '</tbody></table></div>';
-  document.getElementById('type-breakdown').innerHTML = th;
-}
-
-function renderUsers() {
-  if (!isAdmin()) return;
-  let html = '<div class="table-wrap"><table><thead><tr><th>Name</th><th>Username</th><th>Email</th><th></th></tr></thead><tbody>';
-  users.forEach(u => {
-    if (u.username === 'admin') return;
-    html += `<tr><td>${escape(u.name)}</td><td>${escape(u.username)}</td><td>${escape(u.email||'')}</td>
-      <td><button class="small danger" onclick="deleteUser('${u.username}')">Delete</button></td></tr>`;
-  });
-  html += '</tbody></table></div>';
-  document.getElementById('users-list').innerHTML = html || '<p>No other accounts.</p>';
-}
-
-function deleteUser(username) {
-  if (username === 'admin') return;
-  const pw = prompt('Enter your admin password to confirm deletion:');
-  if (pw !== currentUser.password) { alert('Incorrect password'); return; }
-  if (!confirm(`Delete account "${username}" and all their tasks?`)) return;
-  users = users.filter(u => u.username !== username);
-  tasks = tasks.filter(t => t.user !== username);
-  inbox = inbox.filter(m => m.to !== username && m.from !== username);
-  saveUsers(); saveTasks(); saveInbox();
-  renderUsers();
-  render();
-  alert('Account deleted.');
-}
-
-document.getElementById('pw-form').onsubmit = function(e) {
-  e.preventDefault();
-  const cur = document.getElementById('pw-current').value;
-  const neu = document.getElementById('pw-new').value;
-  const conf = document.getElementById('pw-confirm').value;
-  const msg = document.getElementById('pw-msg');
-  if (cur !== currentUser.password) { msg.textContent = 'Current password incorrect'; msg.style.color = '#b91c1c'; return; }
-  if (neu !== conf) { msg.textContent = 'New passwords do not match'; msg.style.color = '#b91c1c'; return; }
-  if (neu.length < 4) { msg.textContent = 'Password too short'; msg.style.color = '#b91c1c'; return; }
-  const u = users.find(x => x.username === currentUser.username);
-  if (u) { u.password = neu; currentUser.password = neu; saveUsers(); }
-  msg.textContent = 'Password updated successfully';
-  msg.style.color = '#15803d';
-  this.reset();
-};
-
-function populateUserFilter() {
-  const sel = document.getElementById('filter-user');
-  sel.innerHTML = '<option value="">All</option>';
-  users.forEach(u => { sel.innerHTML += `<option value="${u.username}">${escape(u.name)}</option>`; });
-}
-
-function render() {
-  if (!currentUser) return;
-  renderDashboard();
-  renderAll();
-  renderMy();
-  renderInbox();
-  if (isAdmin()) { renderPerf(); renderUsers(); renderTypesList(); }
-  updateInboxBadge();
-}
-
-document.getElementById('filter-user').onchange = renderAll;
-document.getElementById('filter-type').onchange = renderAll;
-document.getElementById('filter-status').onchange = renderAll;
-
-load();
-</script>
 </body>
 </html>
