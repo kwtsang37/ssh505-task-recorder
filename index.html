@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#1e3a5f">
-<title>SS H505 ACMV Task Recorder (Online) v1.1</title>
+<title>SS H505 ACMV Task Recorder (Online) v1.2</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1e293b; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
@@ -39,6 +39,7 @@
   .in-progress { background: #fef3c7; }
   .completed { background: #d1fae5; }
   .overdue { background: #fee2e2; color: #991b1b; }
+  .pending { background: #fde68a; }
   .type-badge { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 4px; }
   .hidden { display: none; }
   .login-box { max-width: 420px; margin: 24px auto; }
@@ -59,7 +60,8 @@
   .marquee-wrap { overflow: hidden; white-space: nowrap; margin-top: 4px; }
   .marquee-text { display: inline-block; padding-left: 100%; animation: marquee 20s linear infinite; }
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
-  .loading { opacity: 0.7; pointer-events: none; }
+  .detail-row td { background: #f8fafc; padding: 14px 12px; }
+  .prog-activity { background: rgba(255,255,255,0.1); padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 0.9rem; }
 </style>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script type="module">
@@ -92,7 +94,26 @@ let tasks = [];
 let inbox = [];
 let users = [];
 let announcement = 'Welcome to the SS H505 ACMV Task Recorder.';
+let programme = [];
+let progVersion = 'Rev. 7 r3 (21 Jul 2026)';
+let expandedTaskId = null;
 let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
+
+function isAdmin() { return currentUser && currentUser.role === 'admin'; }
+function today() { return new Date().toISOString().slice(0,10); }
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr); const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((d - t) / 86400000);
+}
+function isOverdue(t) { return t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) < 0; }
+function escape(s) { return String(s||'').replace(/[&<>"']/g, m => ({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[m])); }
+function scoreLabel(s) {
+  if (s == null) return '';
+  if (s <= 2) return 'Improvement Required';
+  if (s <= 4) return 'Satisfied';
+  return 'Well Done';
+}
 
 async function sendEmail(toEmail, subject, message) {
   if (!toEmail) return;
@@ -169,26 +190,28 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('task-form').reset();
     showView('all');
   };
+
+  document.getElementById('filter-user').onchange = renderAll;
+  document.getElementById('filter-type').onchange = renderAll;
+  document.getElementById('filter-status').onchange = renderAll;
 });
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    // Show the app immediately so the user sees progress
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('app-section').classList.remove('hidden');
     document.getElementById('user-info').innerHTML = 'Loading... <button onclick="logout()" class="secondary small">Logout</button>';
 
-    // Load user profile in the background
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     currentUser = userDoc.exists()
       ? { uid: user.uid, ...userDoc.data() }
       : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-    if (!userDoc.exists()) {
-      await setDoc(doc(db, 'users', user.uid), currentUser);
-    }
+    if (!userDoc.exists()) await setDoc(doc(db, 'users', user.uid), currentUser);
 
     document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
-    document.getElementById('admin-perf').classList.toggle('hidden', currentUser.role !== 'admin');
+    document.getElementById('admin-perf').classList.toggle('hidden', !isAdmin());
+    document.getElementById('admin-announcement').classList.toggle('hidden', !isAdmin());
+    document.getElementById('admin-prog-upload').classList.toggle('hidden', !isAdmin());
     startListeners();
     showView('all');
   } else {
@@ -214,9 +237,14 @@ function startListeners() {
   });
   unsubUsers = onSnapshot(collection(db, 'users'), snap => {
     users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
+    populateUserFilter();
   });
   unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
-    if (snap.exists()) announcement = snap.data().announcement || announcement;
+    if (snap.exists()) {
+      announcement = snap.data().announcement || announcement;
+      programme = snap.data().programme || programme;
+      progVersion = snap.data().progVersion || progVersion;
+    }
     renderDashboard();
   });
 }
@@ -229,47 +257,132 @@ window.showView = function(v) {
 window.markCompleted = async function(id) {
   if (!confirm('Mark this task as Completed?')) return;
   await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: new Date().toISOString().slice(0,10) });
-  await notifyUser(currentUser.uid, 'Task completed', 'You marked a task as completed.');
 };
 
-async function notifyUser(uid, subject, message) {
-  await addDoc(collection(db, 'inbox'), { to: uid, subject, message, date: serverTimestamp(), read: false });
-  const u = users.find(x => x.uid === uid);
-  if (u && u.email) await sendEmail(u.email, subject, message);
-}
+window.toggleTaskDetail = function(id) {
+  expandedTaskId = expandedTaskId === id ? null : id;
+  renderAll();
+  renderMy();
+};
+
+window.saveAnnouncement = async function() {
+  if (!isAdmin()) return;
+  const text = document.getElementById('announcement-edit').value.trim();
+  await setDoc(doc(db, 'settings', 'main'), { announcement: text }, { merge: true });
+  alert('Announcement saved.');
+};
+
+window.uploadProgramme = async function() {
+  if (!isAdmin()) return;
+  const file = document.getElementById('prog-file').files[0];
+  if (!file) { alert('Please select a file'); return; }
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const text = e.target.result;
+      let acts = [];
+      let version = progVersion;
+      if (file.name.endsWith('.json')) {
+        const obj = JSON.parse(text);
+        acts = obj.activities || obj;
+        version = obj.version || file.name;
+      } else {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const header = lines[0].toLowerCase();
+        lines.slice(header.includes('activity') ? 1 : 0).forEach(line => {
+          const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g,''));
+          if (parts.length >= 3 && parts[1] && parts[2]) {
+            acts.push({ activity: parts[0], start: parts[1], finish: parts[2] });
+          }
+        });
+        version = file.name.replace(/\.[^.]+$/, '');
+      }
+      if (!acts.length) { alert('No valid activities found'); return; }
+      await setDoc(doc(db, 'settings', 'main'), { programme: acts, progVersion: version }, { merge: true });
+      alert('Master Programme updated.');
+      document.getElementById('prog-file').value = '';
+    } catch (err) { alert('Failed to parse: ' + err.message); }
+  };
+  reader.readAsText(file);
+};
+
+window.downloadProgrammeTemplate = function() {
+  const header = 'activity,start,finish';
+  const sample = [
+    'Access / Start on site,2025-05-12,2025-05-12',
+    'Shop drawing schedule Annex C (ACMV),2026-08-17,2026-09-15',
+    '1st AIP resubmission L8 layout,2026-09-30,2026-10-15',
+    'Conceal conduit installation detail TA&P,2027-03-01,2027-04-02',
+    'BW drawing pour release preparation,2026-11-01,2026-12-10',
+    'Contract completion,2029-02-09,2029-02-09'
+  ];
+  const csv = header + '\n' + sample.join('\n') + '\n';
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'SS_H505_Master_Programme_Template.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 function render() {
   renderAll();
   renderMy();
   renderDashboard();
+  if (isAdmin()) renderPerf();
 }
 
 function renderAll() {
-  const list = document.getElementById('all-tasks-list');
-  if (!tasks.length) { list.innerHTML = '<p>No tasks yet.</p>'; return; }
-  let html = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th></tr></thead><tbody>';
-  tasks.forEach(t => {
+  const uf = document.getElementById('filter-user').value;
+  const tf = document.getElementById('filter-type').value;
+  const sf = document.getElementById('filter-status').value;
+  let list = tasks.slice();
+  if (uf) list = list.filter(t => t.user === uf);
+  if (tf) list = list.filter(t => t.type === tf);
+  if (sf === 'overdue') list = list.filter(isOverdue);
+  else if (sf) list = list.filter(t => t.status === sf);
+  list.sort((a,b) => (a.targetDate||'').localeCompare(b.targetDate||''));
+  const el = document.getElementById('all-tasks-list');
+  if (!list.length) { el.innerHTML = '<p>No matching tasks.</p>'; return; }
+  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
+  list.forEach(t => {
     const u = users.find(x => x.uid === t.user) || { name: 'Unknown' };
     const canComplete = t.user === currentUser.uid && t.status !== 'completed';
     html += `<tr>
-      <td>${u.name}</td>
-      <td>${t.title} <span class="type-badge">${t.type||''}</span></td>
+      <td>${escape(u.name)}</td>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>${escape(t.description||'').slice(0,70)}${(t.description||'').length>70?'…':''}</small>
+      </td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${t.status}">${t.status}</span></td>
+      <td><span class="status ${isOverdue(t)?'overdue':t.status}">${isOverdue(t)?'Overdue':t.status}</span></td>
       <td>${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}</td>
+      ${isAdmin() ? `<td>${t.score != null ? '<span class="score">'+t.score+'/5<br><small>'+scoreLabel(t.score)+'</small></span>' : '-'}</td>` : ''}
     </tr>`;
+    if (expandedTaskId === t.id) {
+      html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
+        <strong>${escape(t.title)}</strong><br>
+        <small>Type: ${escape(t.type||'')} · Target: ${t.targetDate||'-'}</small>
+        <p>${escape(t.description||'(no description)')}</p>
+        ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
+      </td></tr>`;
+    }
   });
   html += '</tbody></table></div>';
-  list.innerHTML = html;
+  el.innerHTML = html;
 }
 
 function renderMy() {
   const mine = tasks.filter(t => t.user === currentUser.uid);
   const el = document.getElementById('my-tasks-list');
   if (!mine.length) { el.innerHTML = '<p>No tasks assigned to you yet.</p>'; return; }
-  let html = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>';
+  let html = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Created</th><th>Target</th><th>Status</th></tr></thead><tbody>';
   mine.forEach(t => {
-    html += `<tr><td>${t.title}</td><td>${t.targetDate||'-'}</td><td><span class="status ${t.status}">${t.status}</span></td></tr>`;
+    html += `<tr>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
+      <td>${(t.created && t.created.toDate ? t.created.toDate().toISOString().slice(0,10) : '-')}</td>
+      <td>${t.targetDate||'-'}</td>
+      <td><span class="status ${isOverdue(t)?'overdue':t.status}">${isOverdue(t)?'Overdue':t.status}</span></td>
+    </tr>`;
   });
   html += '</tbody></table></div>';
   el.innerHTML = html;
@@ -277,12 +390,37 @@ function renderMy() {
 
 function renderDashboard() {
   const completed = tasks.filter(t => t.status === 'completed').length;
+  const overdue = tasks.filter(isOverdue).length;
+  const start = new Date('2025-05-12');
+  const end = new Date('2029-02-09');
+  const now = new Date();
+  const totalDays = Math.round((end - start) / 86400000);
+  const passedDays = Math.max(0, Math.round((now - start) / 86400000));
+  const prog = Math.min(100, Math.max(0, Math.round(passedDays / totalDays * 100)));
+  document.getElementById('prog-version').textContent = '· ' + progVersion;
   document.getElementById('dash-content').innerHTML = `
-    <div class="dash-stat"><strong>${tasks.length}</strong>Total Tasks</div>
+    <div class="dash-stat"><strong>${prog}%</strong>Programme elapsed<br><small>${passedDays} / ${totalDays} days</small></div>
     <div class="dash-stat"><strong>${completed}</strong>Completed</div>
     <div class="dash-stat"><strong>${tasks.length - completed}</strong>Open</div>
+    <div class="dash-stat"><strong>${overdue}</strong>Overdue</div>
   `;
-  document.getElementById('announcement-text').textContent = announcement;
+  document.getElementById('announcement-text').textContent = announcement || '(No announcement)';
+  if (isAdmin()) document.getElementById('announcement-edit').value = announcement;
+  const todayStr = today();
+  const active = programme.filter(a => a.start <= todayStr && a.finish >= todayStr);
+  let actHtml = '<strong>Activities on this date:</strong>';
+  if (active.length) {
+    active.forEach(a => actHtml += `<div class="prog-activity">${escape(a.activity)} (${a.start} – ${a.finish})</div>`);
+  } else {
+    actHtml += '<div class="prog-activity">No programme activities exactly on today.</div>';
+  }
+  document.getElementById('today-activities').innerHTML = actHtml;
+}
+
+function populateUserFilter() {
+  const sel = document.getElementById('filter-user');
+  sel.innerHTML = '<option value="">All</option>';
+  users.forEach(u => { sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`; });
 }
 
 function updateInboxBadge() {
@@ -295,20 +433,39 @@ function updateInboxBadge() {
 function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
-  el.innerHTML = inbox.map(m => `<div style="padding:8px 0; border-bottom:1px solid #eee;"><strong>${m.subject}</strong><br><small>${m.message||''}</small></div>`).join('');
+  el.innerHTML = inbox.map(m => `<div style="padding:8px 0; border-bottom:1px solid #eee;"><strong>${escape(m.subject||'')}</strong><br><small>${escape(m.message||'')}</small></div>`).join('');
 }
 
-// Seed settings
+function renderPerf() {
+  if (!isAdmin()) return;
+  document.getElementById('perf-summary').innerHTML = `
+    <div class="stat"><strong>${users.length}</strong>Users</div>
+    <div class="stat"><strong>${tasks.length}</strong>Tasks</div>
+    <div class="stat"><strong>${tasks.filter(t=>t.status==='completed').length}</strong>Completed</div>
+  `;
+}
+
+// Seed default settings if missing
 (async () => {
   const settingsRef = doc(db, 'settings', 'main');
   const snap = await getDoc(settingsRef);
-  if (!snap.exists()) await setDoc(settingsRef, { announcement });
+  if (!snap.exists()) {
+    await setDoc(settingsRef, {
+      announcement,
+      progVersion,
+      programme: [
+        { activity: 'Access / Start on site', start: '2025-05-12', finish: '2025-05-12' },
+        { activity: 'Shop drawing schedule Annex C (ACMV)', start: '2026-08-17', finish: '2026-09-15' },
+        { activity: 'Contract completion', start: '2029-02-09', finish: '2029-02-09' }
+      ]
+    });
+  }
 })();
 </script>
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder (Online) <small style="font-weight:normal; opacity:0.8;">v1.1</small></h1>
+  <h1>SS H505 ACMV Task Recorder (Online) <small style="font-weight:normal; opacity:0.8;">v1.2</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -333,10 +490,25 @@ function renderInbox() {
 
   <div id="app-section" class="hidden">
     <div id="dashboard" class="dashboard">
-      <h2>Programme & Task Status</h2>
+      <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
       <div id="dash-content" class="dash-stats"></div>
-      <div class="marquee-wrap"><div id="announcement-text" class="marquee-text"></div></div>
+      <div id="announcement-box" style="margin-top:12px; background:rgba(255,255,255,0.15); padding:10px 12px; border-radius:8px;">
+        <strong>Announcement</strong>
+        <div class="marquee-wrap"><div id="announcement-text" class="marquee-text"></div></div>
+        <div id="admin-announcement" class="hidden" style="margin-top:8px;">
+          <textarea id="announcement-edit" rows="3" style="width:100%; background:white; color:#1e293b;"></textarea>
+          <button type="button" class="small" onclick="saveAnnouncement()" style="margin-top:6px;">Save Announcement</button>
+        </div>
+      </div>
+      <div id="today-activities" style="margin-top:12px;"></div>
+      <div id="admin-prog-upload" class="hidden" style="margin-top:12px;">
+        <label style="color:white;">Update Master Programme (admin)</label>
+        <div style="margin-top:6px;"><button type="button" class="small secondary" onclick="downloadProgrammeTemplate()">Download CSV Template</button></div>
+        <input type="file" id="prog-file" accept=".csv,.json,.txt" style="margin-top:8px; background:white; color:#1e293b;">
+        <button type="button" class="small" onclick="uploadProgramme()" style="margin-top:6px;">Upload & Replace</button>
+      </div>
     </div>
+
     <div class="tabs" id="main-tabs">
       <button onclick="showView('all')">All Tasks</button>
       <button onclick="showView('my')">My Tasks</button>
@@ -347,6 +519,17 @@ function renderInbox() {
 
     <div id="view-all" class="card">
       <h2>All Tasks</h2>
+      <div class="grid" style="margin-bottom:12px;">
+        <div><label>User</label><select id="filter-user" style="width:100%;"><option value="">All</option></select></div>
+        <div><label>Type</label><select id="filter-type" style="width:100%;"><option value="">All</option>
+          <option>Drawing submission</option><option>Document submission</option><option>Coordination</option>
+          <option>Calculation</option><option>Material Submission</option><option>Others</option>
+        </select></div>
+        <div><label>Status</label><select id="filter-status" style="width:100%;"><option value="">All</option>
+          <option value="not-started">Not Started</option><option value="in-progress">In Progress</option>
+          <option value="completed">Completed</option><option value="overdue">Overdue</option>
+        </select></div>
+      </div>
       <div id="all-tasks-list"></div>
     </div>
 
@@ -389,8 +572,12 @@ function renderInbox() {
       <div id="inbox-list"></div>
     </div>
 
-    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Password change and account management will be added in the next update.</p></div>
-    <div id="view-perf" class="card hidden"><h2>Performance</h2><p>Team and individual performance views will be added in the next update.</p></div>
+    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Account settings available in future update.</p></div>
+    <div id="view-perf" class="card hidden">
+      <h2>Performance</h2>
+      <div id="perf-summary" class="summary-grid"></div>
+      <p style="margin-top:16px;">Detailed team and individual performance views can be expanded further.</p>
+    </div>
   </div>
 </div>
 </body>
