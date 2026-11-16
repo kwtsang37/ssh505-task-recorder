@@ -173,11 +173,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    currentUser = userDoc.exists() ? { uid: user.uid, ...userDoc.data() } : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-    if (!userDoc.exists()) await setDoc(doc(db, 'users', user.uid), currentUser);
+    // Show the app immediately so the user sees progress
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('app-section').classList.remove('hidden');
+    document.getElementById('user-info').innerHTML = 'Loading... <button onclick="logout()" class="secondary small">Logout</button>';
+
+    // Load user profile in the background
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    currentUser = userDoc.exists()
+      ? { uid: user.uid, ...userDoc.data() }
+      : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+    if (!userDoc.exists()) {
+      await setDoc(doc(db, 'users', user.uid), currentUser);
+    }
+
     document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
     document.getElementById('admin-perf').classList.toggle('hidden', currentUser.role !== 'admin');
     startListeners();
