@@ -140,12 +140,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (email && !email.includes('@')) email += '@newland.com.hk';
     const pass = document.getElementById('login-pass').value;
     try {
+      console.log('Trying login with:', email);
       await signInWithEmailAndPassword(auth, email, pass);
     } catch (err) {
+      console.error('Login error:', err.code, err.message);
       let msg = err.message;
       if (err.code === 'auth/user-not-found') msg = 'Account not found. Please Register first.';
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') msg = 'Wrong password or account not registered.';
-      errEl.textContent = msg;
+      if (err.code === 'auth/wrong-password') msg = 'Wrong password.';
+      if (err.code === 'auth/invalid-credential') msg = 'Invalid credentials. Register first if this account does not exist.';
+      if (err.code === 'auth/invalid-email') msg = 'Invalid email format.';
+      if (err.code === 'auth/unauthorized-domain') msg = 'Domain not authorized. Add kwtsang37.github.io in Firebase Console.';
+      errEl.textContent = msg + ' [code: ' + (err.code || 'unknown') + ']';
       btn.textContent = 'Login';
       btn.disabled = false;
     }
