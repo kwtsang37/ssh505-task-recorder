@@ -315,7 +315,7 @@ window.changePassword = async function() {
   } catch (err) {
     alert('Failed: ' + err.message + '\nYou may need to re-login first.');
   }
-};
+window.deleteInboxMessage = async function(id) {
   if (!confirm('Delete this message?')) return;
   await deleteDoc(doc(db, 'inbox', id));
 };
@@ -493,7 +493,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.1</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
