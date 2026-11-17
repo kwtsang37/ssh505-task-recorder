@@ -103,7 +103,9 @@ let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
 
 function isAdmin() { 
   if (!currentUser) return false;
-  return currentUser.role === 'admin' || (currentUser.email || '').toLowerCase() === ADMIN_EMAIL || (currentUser.name || '').toLowerCase() === 'admin';
+  const email = (currentUser.email || '').toLowerCase();
+  const name = (currentUser.name || '').toLowerCase();
+  return currentUser.role === 'admin' || email.includes('admin') || name.includes('admin');
 }
 function today() { return new Date().toISOString().slice(0,10); }
 function daysUntil(dateStr) {
@@ -215,6 +217,12 @@ onAuthStateChanged(auth, async (user) => {
       }
       document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
       updateAdminUI();
+      // Debug panel
+      const dbg = document.getElementById('debug-info');
+      if (dbg) {
+        dbg.innerHTML = `<small>uid: ${currentUser.uid}<br>email: ${currentUser.email}<br>name: ${currentUser.name}<br>role: ${currentUser.role}<br>isAdmin: ${isAdmin()}</small>`;
+        dbg.style.display = 'block';
+      }
     } catch (err) {
       console.warn(err);
       currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
@@ -464,6 +472,7 @@ function renderPerf() {
   </div>
 
   <div id="app-section" class="hidden">
+    <div id="debug-info" style="background:#fef3c7; padding:8px; border-radius:6px; margin-bottom:8px; display:none; font-family:monospace; font-size:0.8rem;"></div>
     <div id="dashboard" class="dashboard">
       <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
       <div id="dash-content" class="dash-stats"></div>
