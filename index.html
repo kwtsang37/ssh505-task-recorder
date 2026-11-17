@@ -237,7 +237,19 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-window.logout = () => signOut(auth);
+window.logout = async function() {
+  try { await signOut(auth); } catch (e) { console.warn(e); }
+  currentUser = null;
+  document.getElementById('auth-section').classList.remove('hidden');
+  document.getElementById('app-section').classList.add('hidden');
+  document.getElementById('user-info').innerHTML = '';
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('auth-error').textContent = '';
+  const btn = document.querySelector('#login-form button[type="submit"]');
+  if (btn) { btn.textContent = 'Login'; btn.disabled = false; }
+  showAuth('login');
+};
 
 function startListeners() {
   if (unsubTasks) unsubTasks();
@@ -274,6 +286,17 @@ window.rejectTask = async function(id) {
   const reason = prompt('Reason:');
   if (!reason) return;
   await updateDoc(doc(db, 'tasks', id), { acceptance: 'rejected', user: null, status: 'not-started' });
+};
+
+window.addComment = async function(id) {
+  if (!isAdmin()) return;
+  const comment = prompt('Add comment:');
+  if (!comment) return;
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  const comments = t.comments || [];
+  comments.push((currentUser.name || 'Admin') + ': ' + comment);
+  await updateDoc(doc(db, 'tasks', id), { comments });
 };
 
 window.setScore = async function(id) {
@@ -374,7 +397,21 @@ window.uploadProgramme = async function() {
   reader.readAsText(file);
 };
 
-function render() { renderAll(); renderMy(); renderDashboard(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
+function render() { renderAll(); renderMy(); renderDashboard(); renderInbox(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
+
+function renderInbox() {
+  const el = document.getElementById('inbox-list');
+  if (!el) return;
+  if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
+  el.innerHTML = inbox.map(m => `<div style="padding:10px 0; border-bottom:1px solid #eee;">
+    <strong>${escape(m.subject || 'Message')}</strong><br>
+    <small>${escape(m.message || '')}</small>
+    <div class="actions" style="margin-top:6px;">
+      ${m.taskId ? `<button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button>` : ''}
+      <button class="small secondary" onclick="deleteInboxMessage('${m.id}')">Delete</button>
+    </div>
+  </div>`).join('');
+}
 
 function renderAll() {
   const uf = document.getElementById('filter-user').value;
@@ -493,7 +530,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.1</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.3</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
