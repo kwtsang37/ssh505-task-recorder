@@ -124,7 +124,7 @@ function scoreLabel(s) {
 
 function updateAdminUI() {
   const admin = isAdmin();
-  ['admin-perf','admin-announcement','admin-prog-upload','assign-box'].forEach(id => {
+  ['admin-perf','admin-announcement','admin-prog-upload','assign-box','admin-tools'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('hidden', !admin);
   });
@@ -208,24 +208,24 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('app-section').classList.remove('hidden');
+    // Always show something in header first
+    document.getElementById('user-info').innerHTML = `${user.email.split('@')[0]} <button onclick="logout()" class="secondary small">Logout</button>`;
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       currentUser = userDoc.exists() ? { uid: user.uid, ...userDoc.data() } : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-      if ((currentUser.email || '').toLowerCase() === ADMIN_EMAIL || (currentUser.name || '').toLowerCase() === 'admin') {
+      // Fallback if name/email missing from Firestore
+      if (!currentUser.email) currentUser.email = user.email;
+      if (!currentUser.name) currentUser.name = user.email ? user.email.split('@')[0] : 'Admin';
+      if ((currentUser.email || '').toLowerCase().includes('admin') || (currentUser.name || '').toLowerCase().includes('admin')) {
         currentUser.role = 'admin';
-        await setDoc(doc(db, 'users', user.uid), { role: 'admin' }, { merge: true });
+        await setDoc(doc(db, 'users', user.uid), { role: 'admin', email: currentUser.email, name: currentUser.name }, { merge: true });
       }
-      document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
+      document.getElementById('user-info').innerHTML = `${currentUser.name || 'Admin'} <button onclick="logout()" class="secondary small">Logout</button>`;
       updateAdminUI();
-      // Debug panel
-      const dbg = document.getElementById('debug-info');
-      if (dbg) {
-        dbg.innerHTML = `<small>uid: ${currentUser.uid}<br>email: ${currentUser.email}<br>name: ${currentUser.name}<br>role: ${currentUser.role}<br>isAdmin: ${isAdmin()}</small>`;
-        dbg.style.display = 'block';
-      }
     } catch (err) {
-      console.warn(err);
+      console.error('Profile load error:', err);
       currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+      document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
     }
     startListeners();
     showView('all');
@@ -283,7 +283,53 @@ window.setScore = async function(id) {
   await updateDoc(doc(db, 'tasks', id), { score: Number(score) });
 };
 
-window.addComment = async function(id) {
+window.addTaskType = async function() {
+  if (!isAdmin()) return;
+  const name = prompt('New task type name:');
+  if (!name) return;
+  const types = [...new Set([...(window._taskTypes || []), name])];
+  window._taskTypes = types;
+  await setDoc(doc(db, 'settings', 'main'), { taskTypes: types }, { merge: true });
+  alert('Type added. Refresh to see it in the dropdown.');
+};
+
+window.checkOverdue = async function() {
+  const overdue = tasks.filter(isOverdue);
+  for (const t of overdue) {
+    if (t.user) {
+      await addDoc(collection(db, 'inbox'), {
+        to: t.user, subject: 'Task overdue', message: `"${t.title}" is overdue.`, date: serverTimestamp(), read: false
+      });
+    }
+  }
+  if (overdue.length) alert(overdue.length + ' overdue notification(s) sent.');
+};
+
+window.changePassword = async function() {
+  const newPass = prompt('Enter new password (min 6 characters):');
+  if (!newPass || newPass.length < 6) { alert('Password too short'); return; }
+  try {
+    const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    await updatePassword(auth.currentUser, newPass);
+    alert('Password updated.');
+  } catch (err) {
+    alert('Failed: ' + err.message + '\nYou may need to re-login first.');
+  }
+};
+  if (!confirm('Delete this message?')) return;
+  await deleteDoc(doc(db, 'inbox', id));
+};
+
+window.renderIndividual = function() {
+  const uid = document.getElementById('indiv-user') ? document.getElementById('indiv-user').value : '';
+  if (!uid) return;
+  const u = users.find(x => x.uid === uid);
+  const list = tasks.filter(t => t.user === uid);
+  const completed = list.filter(t => t.status === 'completed');
+  const scored = completed.filter(t => t.score != null);
+  const avg = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
+  document.getElementById('indiv-result').innerHTML = `<h4>${escape(u ? u.name : uid)}</h4><p>Tasks: ${list.length} · Completed: ${completed.length} · Avg: ${avg}</p>`;
+};
   if (!isAdmin()) return;
   const c = prompt('Comment:');
   if (!c) return;
@@ -447,7 +493,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online)</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -472,7 +518,6 @@ function renderPerf() {
   </div>
 
   <div id="app-section" class="hidden">
-    <div id="debug-info" style="background:#fef3c7; padding:8px; border-radius:6px; margin-bottom:8px; display:none; font-family:monospace; font-size:0.8rem;"></div>
     <div id="dashboard" class="dashboard">
       <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
       <div id="dash-content" class="dash-stats"></div>
@@ -499,6 +544,7 @@ function renderPerf() {
       <button onclick="showView('add')">Add Task</button>
       <button onclick="showView('inbox')">Inbox <span id="inbox-badge" class="badge hidden">0</span></button>
       <button id="admin-perf" class="hidden" onclick="showView('perf')">Performance</button>
+      <button onclick="showView('settings')">Settings</button>
     </div>
 
     <div id="view-all" class="card">
@@ -554,7 +600,15 @@ function renderPerf() {
     </div>
 
     <div id="view-inbox" class="card hidden"><h2>Inbox</h2><div id="inbox-list"></div></div>
-    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Online version.</p></div>
+    <div id="view-settings" class="card hidden">
+      <h2>Settings</h2>
+      <button type="button" onclick="changePassword()">Change Password</button>
+      <div id="admin-tools" class="hidden" style="margin-top:16px;">
+        <h3>Admin Tools</h3>
+        <button type="button" class="small" onclick="addTaskType()">Add Task Type</button>
+        <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+      </div>
+    </div>
     <div id="view-perf" class="card hidden">
       <h2>Performance</h2>
       <div id="perf-summary" class="summary-grid"></div>
