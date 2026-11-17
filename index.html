@@ -70,6 +70,10 @@ function showAuth(mode) {
   document.getElementById('tab-register').classList.toggle('active', mode === 'register');
   document.getElementById('auth-error').textContent = '';
 }
+// Placeholders so buttons never say "not defined"
+window.acceptTask = window.acceptTask || function() { alert('Please wait for the page to finish loading.'); };
+window.rejectTask = window.rejectTask || function() { alert('Please wait for the page to finish loading.'); };
+window.deleteInboxMessage = window.deleteInboxMessage || function() { alert('Please wait for the page to finish loading.'); };
 </script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -273,7 +277,20 @@ window.showView = function(v) {
 
 window.markCompleted = async function(id) {
   if (!confirm('Mark as Completed?')) return;
+  const t = tasks.find(x => x.id === id);
   await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today() });
+  // Notify admin
+  const adminUser = users.find(u => u.role === 'admin' || (u.email || '').toLowerCase().includes('admin'));
+  if (adminUser && adminUser.uid !== currentUser.uid) {
+    await addDoc(collection(db, 'inbox'), {
+      to: adminUser.uid,
+      subject: 'Task completed',
+      message: `${currentUser.name || 'A user'} marked "${t ? t.title : 'a task'}" as completed. Please score it.`,
+      taskId: id,
+      date: serverTimestamp(),
+      read: false
+    });
+  }
 };
 
 window.toggleTaskDetail = function(id) { expandedTaskId = expandedTaskId === id ? null : id; renderAll(); };
@@ -503,13 +520,64 @@ function updateInboxBadge() {
   badge.classList.toggle('hidden', unread === 0);
 }
 
+window.showPerfTab = function(tab) {
+  document.getElementById('perf-team').classList.toggle('hidden', tab !== 'team');
+  document.getElementById('perf-indiv').classList.toggle('hidden', tab !== 'indiv');
+  document.getElementById('perf-team-tab').classList.toggle('active', tab === 'team');
+  document.getElementById('perf-indiv-tab').classList.toggle('active', tab === 'indiv');
+  if (tab === 'indiv') populateIndivUsers();
+};
+
+function populateIndivUsers() {
+  const sel = document.getElementById('indiv-user');
+  if (!sel) return;
+  sel.innerHTML = users.filter(u => u.role !== 'admin').map(u => `<option value="${u.uid}">${escape(u.name)}</option>`).join('');
+}
+
 function renderPerf() {
   if (!isAdmin()) return;
+  const userMap = {};
+  users.filter(u => u.role !== 'admin').forEach(u => {
+    userMap[u.uid] = { name: u.name, total: 0, completed: 0, overdue: 0, scores: [], onTime: 0 };
+  });
+  tasks.forEach(t => {
+    if (!t.user || !userMap[t.user]) return;
+    const b = userMap[t.user];
+    b.total++;
+    if (t.status === 'completed') {
+      b.completed++;
+      if (t.actualDate && t.targetDate && t.actualDate <= t.targetDate) b.onTime++;
+    }
+    if (isOverdue(t)) b.overdue++;
+    if (t.score != null) b.scores.push(t.score);
+  });
+  const arr = Object.values(userMap);
+  const totalTasks = tasks.length;
+  const totalCompleted = tasks.filter(t => t.status === 'completed').length;
+  const scored = tasks.filter(t => t.score != null);
+  const avgScore = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
   document.getElementById('perf-summary').innerHTML = `
-    <div class="stat"><strong>${users.length}</strong>Users</div>
-    <div class="stat"><strong>${tasks.length}</strong>Tasks</div>
-    <div class="stat"><strong>${tasks.filter(t=>t.status==='completed').length}</strong>Completed</div>
-  `;
+    <div class="stat"><strong>${users.filter(u=>u.role!=='admin').length}</strong>Users</div>
+    <div class="stat"><strong>${totalTasks}</strong>Tasks</div>
+    <div class="stat"><strong>${totalCompleted}</strong>Completed</div>
+    <div class="stat"><strong>${avgScore}</strong>Avg score</div>`;
+  let html = `<div class="table-wrap"><table><thead><tr><th>Teammate</th><th>Tasks</th><th>Completed</th><th>On-time</th><th>Overdue</th><th>Avg Score</th></tr></thead><tbody>`;
+  arr.sort((a,b) => b.total - a.total).forEach(b => {
+    const avg = b.scores.length ? (b.scores.reduce((a,c)=>a+c,0)/b.scores.length).toFixed(1) : '-';
+    const onTimePct = b.completed ? Math.round(b.onTime / b.completed * 100) + '%' : '-';
+    html += `<tr><td>${escape(b.name)}</td><td>${b.total}</td><td>${b.completed}</td><td>${onTimePct}</td><td>${b.overdue}</td><td>${avg}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('perf-table').innerHTML = html || '<p>No data.</p>';
+
+  const typeCount = {};
+  const defaultTypes = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  defaultTypes.forEach(t => typeCount[t] = 0);
+  tasks.forEach(t => { if (t.type) typeCount[t.type] = (typeCount[t.type] || 0) + 1; });
+  let th = '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>';
+  Object.keys(typeCount).forEach(t => th += `<tr><td>${escape(t)}</td><td>${typeCount[t]}</td></tr>`);
+  th += '</tbody></table></div>';
+  document.getElementById('type-breakdown').innerHTML = th;
 }
 
 (async () => {
@@ -530,7 +598,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.3</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.6</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -648,7 +716,27 @@ function renderPerf() {
     </div>
     <div id="view-perf" class="card hidden">
       <h2>Performance</h2>
-      <div id="perf-summary" class="summary-grid"></div>
+      <div class="tabs" style="margin-bottom:12px;">
+        <button class="active" id="perf-team-tab" onclick="showPerfTab('team')">Team</button>
+        <button id="perf-indiv-tab" onclick="showPerfTab('indiv')">Individual</button>
+      </div>
+      <div id="perf-team">
+        <h3>Team Overview</h3>
+        <div id="perf-summary" class="summary-grid" style="margin-bottom:16px;"></div>
+        <div id="perf-table"></div>
+        <h3 style="margin-top:20px;">Task Type Breakdown</h3>
+        <div id="type-breakdown"></div>
+      </div>
+      <div id="perf-indiv" class="hidden">
+        <h3>Individual Performance</h3>
+        <div class="grid" style="margin-bottom:12px;">
+          <div><label>User</label><select id="indiv-user" style="width:100%;"></select></div>
+          <div><label>From</label><input type="date" id="indiv-from" style="width:100%;"></div>
+          <div><label>To</label><input type="date" id="indiv-to" style="width:100%;"></div>
+        </div>
+        <button type="button" onclick="renderIndividual()">Search</button>
+        <div id="indiv-result" style="margin-top:16px;"></div>
+      </div>
     </div>
   </div>
 </div>
