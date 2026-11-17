@@ -4,10 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#1e3a5f">
-<title>SS H505 ACMV Task Recorder (Online + Firebase Auth)</title>
+<title>SS H505 ACMV Task Recorder (Online)</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1e293b; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
@@ -30,7 +27,7 @@
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 480px; }
   th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  th { background: #f1f5f9; font-weight: 600; white-space: nowrap; }
+  th { background: #f1f5f9; font-weight: 600; }
   .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
   .tabs button { background: #e2e8f0; color: #1e293b; flex: 1; min-width: 90px; min-height: 44px; }
   .tabs button.active { background: #1e3a5f; color: white; }
@@ -62,6 +59,8 @@
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
   .detail-row td { background: #f8fafc; padding: 14px 12px; }
   .prog-activity { background: rgba(255,255,255,0.1); padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 0.9rem; }
+  .comment { background: #f8fafc; border-left: 3px solid #1e3a5f; padding: 10px; margin: 8px 0; font-size: 0.88rem; border-radius: 0 6px 6px 0; }
+  .score { font-weight: 700; color: #1e3a5f; }
 </style>
 <script>
 function showAuth(mode) {
@@ -104,32 +103,7 @@ let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
 
 function isAdmin() { 
   if (!currentUser) return false;
-  const email = (currentUser.email || '').toLowerCase();
-  const name = (currentUser.name || '').toLowerCase();
-  // Force admin for any account named "admin" or email starting with admin
-  if (name === 'admin' || email.startsWith('admin') || email === ADMIN_EMAIL || currentUser.role === 'admin') return true;
-  return false;
-}
-
-window.forceAdmin = function() {
-  if (!currentUser) return;
-  currentUser.role = 'admin';
-  currentUser.name = currentUser.name || 'admin';
-  updateAdminUI();
-  alert('Admin mode enabled for this session.');
-};
-  const admin = isAdmin();
-  const perf = document.getElementById('admin-perf');
-  const ann = document.getElementById('admin-announcement');
-  const prog = document.getElementById('admin-prog-upload');
-  const assign = document.getElementById('assign-box');
-  if (perf) perf.classList.toggle('hidden', !admin);
-  if (ann) ann.classList.toggle('hidden', !admin);
-  if (prog) prog.classList.toggle('hidden', !admin);
-  if (assign) assign.classList.toggle('hidden', !admin);
-  // Debug indicator
-  const dbg = document.getElementById('admin-debug');
-  if (dbg) dbg.textContent = admin ? 'ADMIN MODE' : 'user mode';
+  return currentUser.role === 'admin' || (currentUser.email || '').toLowerCase() === ADMIN_EMAIL || (currentUser.name || '').toLowerCase() === 'admin';
 }
 function today() { return new Date().toISOString().slice(0,10); }
 function daysUntil(dateStr) {
@@ -146,20 +120,32 @@ function scoreLabel(s) {
   return 'Well Done';
 }
 
+function updateAdminUI() {
+  const admin = isAdmin();
+  ['admin-perf','admin-announcement','admin-prog-upload','assign-box'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !admin);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('login-form').onsubmit = async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
     btn.textContent = 'Logging in...';
     btn.disabled = true;
-    document.getElementById('auth-error').textContent = '';
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
     let email = document.getElementById('login-user').value.trim();
     if (email && !email.includes('@')) email += '@newland.com.hk';
     const pass = document.getElementById('login-pass').value;
     try {
       await signInWithEmailAndPassword(auth, email, pass);
     } catch (err) {
-      document.getElementById('auth-error').textContent = err.message;
+      let msg = err.message;
+      if (err.code === 'auth/user-not-found') msg = 'Account not found. Please Register first.';
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') msg = 'Wrong password or account not registered.';
+      errEl.textContent = msg;
       btn.textContent = 'Login';
       btn.disabled = false;
     }
@@ -168,7 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('register-form').onsubmit = async (e) => {
     e.preventDefault();
     const btn = e.target.querySelector('button[type="submit"]');
-    btn.textContent = 'Creating account...';
+    btn.textContent = 'Creating...';
     btn.disabled = true;
     document.getElementById('auth-error').textContent = '';
     let email = document.getElementById('reg-user').value.trim();
@@ -185,26 +171,44 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.disabled = false;
     }
   };
+
+  document.getElementById('task-form').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    const assign = document.getElementById('task-assign').value;
+    const data = {
+      title: document.getElementById('task-title').value.trim(),
+      type: document.getElementById('task-type').value,
+      description: document.getElementById('task-desc').value.trim(),
+      targetDate: document.getElementById('task-target').value,
+      status: document.getElementById('task-status').value,
+      user: assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign),
+      acceptance: assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending'),
+      created: serverTimestamp(),
+      comments: [],
+      score: null
+    };
+    const ref = await addDoc(collection(db, 'tasks'), data);
+    if (data.acceptance === 'pending' && data.user) {
+      await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
+    }
+    document.getElementById('task-form').reset();
+    showView('all');
+  };
 });
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('app-section').classList.remove('hidden');
-    document.getElementById('user-info').innerHTML = `${user.email.split('@')[0]} <button onclick="logout()" class="secondary small">Logout</button>`;
-
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const isAdminEmail = user.email && user.email.toLowerCase() === ADMIN_EMAIL;
-      currentUser = userDoc.exists()
-        ? { uid: user.uid, ...userDoc.data() }
-        : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-      if (isAdminEmail) {
+      currentUser = userDoc.exists() ? { uid: user.uid, ...userDoc.data() } : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+      if ((currentUser.email || '').toLowerCase() === ADMIN_EMAIL || (currentUser.name || '').toLowerCase() === 'admin') {
         currentUser.role = 'admin';
         await setDoc(doc(db, 'users', user.uid), { role: 'admin' }, { merge: true });
       }
-      document.getElementById('user-info').innerHTML = `${currentUser.name} <small style="opacity:0.7">(${currentUser.email||''})</small> <button onclick="logout()" class="secondary small">Logout</button>`;
-      document.getElementById('force-admin-btn').style.display = 'inline-block';
+      document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
       updateAdminUI();
     } catch (err) {
       console.warn(err);
@@ -224,19 +228,9 @@ window.logout = () => signOut(auth);
 
 function startListeners() {
   if (unsubTasks) unsubTasks();
-  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => {
-    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    render();
-  });
-  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => {
-    inbox = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    updateInboxBadge();
-    if (!document.getElementById('view-inbox').classList.contains('hidden')) renderInbox();
-  });
-  unsubUsers = onSnapshot(collection(db, 'users'), snap => {
-    users = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-    populateUserFilter();
-  });
+  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => { tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
+  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => { inbox = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateInboxBadge(); });
+  unsubUsers = onSnapshot(collection(db, 'users'), snap => { users = snap.docs.map(d => ({ uid: d.id, ...d.data() })); populateUserFilter(); populateAssign(); });
   unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
     if (snap.exists()) {
       announcement = snap.data().announcement || announcement;
@@ -253,40 +247,36 @@ window.showView = function(v) {
 };
 
 window.markCompleted = async function(id) {
-  if (!confirm('Mark this task as Completed?')) return;
-  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: new Date().toISOString().slice(0,10) });
+  if (!confirm('Mark as Completed?')) return;
+  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today() });
 };
 
-window.toggleTaskDetail = function(id) {
-  expandedTaskId = expandedTaskId === id ? null : id;
-  renderAll();
-  renderMy();
-};
+window.toggleTaskDetail = function(id) { expandedTaskId = expandedTaskId === id ? null : id; renderAll(); };
 
 window.acceptTask = async function(id) {
   await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
 };
 
 window.rejectTask = async function(id) {
-  const reason = prompt('Reason for rejection:');
+  const reason = prompt('Reason:');
   if (!reason) return;
   await updateDoc(doc(db, 'tasks', id), { acceptance: 'rejected', user: null, status: 'not-started' });
 };
 
 window.setScore = async function(id) {
   if (!isAdmin()) return;
-  const score = prompt('Enter score (1-5):');
+  const score = prompt('Score (1-5):');
   if (!score || isNaN(score) || score < 1 || score > 5) return;
   await updateDoc(doc(db, 'tasks', id), { score: Number(score) });
 };
 
 window.addComment = async function(id) {
   if (!isAdmin()) return;
-  const comment = prompt('Add comment:');
-  if (!comment) return;
+  const c = prompt('Comment:');
+  if (!c) return;
   const t = tasks.find(x => x.id === id);
   const comments = t.comments || [];
-  comments.push(`${currentUser.name}: ${comment}`);
+  comments.push(currentUser.name + ': ' + c);
   await updateDoc(doc(db, 'tasks', id), { comments });
 };
 
@@ -294,94 +284,38 @@ window.saveAnnouncement = async function() {
   if (!isAdmin()) return;
   const text = document.getElementById('announcement-edit').value.trim();
   await setDoc(doc(db, 'settings', 'main'), { announcement: text }, { merge: true });
-  alert('Announcement saved.');
+  alert('Saved.');
+};
+
+window.downloadProgrammeTemplate = function() {
+  const csv = 'activity,start,finish\nAccess / Start on site,2025-05-12,2025-05-12\nContract completion,2029-02-09,2029-02-09\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'programme_template.csv';
+  a.click();
 };
 
 window.uploadProgramme = async function() {
   if (!isAdmin()) return;
   const file = document.getElementById('prog-file').files[0];
-  if (!file) { alert('Please select a file'); return; }
+  if (!file) return;
   const reader = new FileReader();
   reader.onload = async function(e) {
-    try {
-      const text = e.target.result;
-      let acts = [];
-      let version = progVersion;
-      if (file.name.endsWith('.json')) {
-        const obj = JSON.parse(text);
-        acts = obj.activities || obj;
-        version = obj.version || file.name;
-      } else {
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        const header = lines[0].toLowerCase();
-        lines.slice(header.includes('activity') ? 1 : 0).forEach(line => {
-          const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g,''));
-          if (parts.length >= 3 && parts[1] && parts[2]) {
-            acts.push({ activity: parts[0], start: parts[1], finish: parts[2] });
-          }
-        });
-        version = file.name.replace(/\.[^.]+$/, '');
-      }
-      if (!acts.length) { alert('No valid activities found'); return; }
-      await setDoc(doc(db, 'settings', 'main'), { programme: acts, progVersion: version }, { merge: true });
-      alert('Master Programme updated.');
-      document.getElementById('prog-file').value = '';
-    } catch (err) { alert('Failed to parse: ' + err.message); }
+    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+    const acts = [];
+    lines.slice(1).forEach(line => {
+      const p = line.split(',').map(x => x.trim());
+      if (p.length >= 3) acts.push({ activity: p[0], start: p[1], finish: p[2] });
+    });
+    if (acts.length) {
+      await setDoc(doc(db, 'settings', 'main'), { programme: acts, progVersion: file.name }, { merge: true });
+      alert('Programme updated.');
+    }
   };
   reader.readAsText(file);
 };
 
-window.downloadProgrammeTemplate = function() {
-  const header = 'activity,start,finish';
-  const sample = [
-    'Access / Start on site,2025-05-12,2025-05-12',
-    'Shop drawing schedule Annex C (ACMV),2026-08-17,2026-09-15',
-    '1st AIP resubmission L8 layout,2026-09-30,2026-10-15',
-    'Conceal conduit installation detail TA&P,2027-03-01,2027-04-02',
-    'BW drawing pour release preparation,2026-11-01,2026-12-10',
-    'Contract completion,2029-02-09,2029-02-09'
-  ];
-  const csv = header + '\n' + sample.join('\n') + '\n';
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'SS_H505_Master_Programme_Template.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
-
-document.getElementById('task-form').onsubmit = async (e) => {
-  e.preventDefault();
-  if (!currentUser) return;
-  const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : 'self';
-  const data = {
-    title: document.getElementById('task-title').value.trim(),
-    type: document.getElementById('task-type').value,
-    description: document.getElementById('task-desc').value.trim(),
-    targetDate: document.getElementById('task-target').value,
-    status: document.getElementById('task-status').value,
-    user: assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign),
-    acceptance: assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending'),
-    created: serverTimestamp(),
-    comments: [],
-    score: null
-  };
-  const ref = await addDoc(collection(db, 'tasks'), data);
-  if (data.acceptance === 'pending' && data.user) {
-    await addDoc(collection(db, 'inbox'), {
-      to: data.user, subject: 'Task assigned to you', message: `Task: ${data.title}`, taskId: ref.id, date: serverTimestamp(), read: false
-    });
-  }
-  document.getElementById('task-form').reset();
-  showView('all');
-};
-
-function render() {
-  renderAll();
-  renderMy();
-  renderDashboard();
-  if (isAdmin()) renderPerf();
-}
+function render() { renderAll(); renderMy(); renderDashboard(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
 
 function renderAll() {
   const uf = document.getElementById('filter-user').value;
@@ -393,32 +327,27 @@ function renderAll() {
   if (sf === 'overdue') list = list.filter(isOverdue);
   else if (sf === 'pending') list = list.filter(t => t.acceptance === 'pending' || t.acceptance === 'open');
   else if (sf) list = list.filter(t => t.status === sf);
-  list.sort((a,b) => (a.targetDate||'').localeCompare(b.targetDate||''));
   const el = document.getElementById('all-tasks-list');
   if (!list.length) { el.innerHTML = '<p>No matching tasks.</p>'; return; }
   let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
   list.forEach(t => {
-    const u = users.find(x => x.uid === t.user) || { name: t.user ? 'Unknown' : 'TBC' };
-    const canComplete = t.user === currentUser.uid && t.status !== 'completed' && t.acceptance !== 'pending';
+    const u = users.find(x => x.uid === t.user);
+    const canComplete = t.user === currentUser.uid && t.status !== 'completed';
     html += `<tr>
-      <td>${t.user ? escape(u.name) : 'TBC'}</td>
-      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span><br>
-        <small>${escape(t.description||'').slice(0,70)}${(t.description||'').length>70?'…':''}</small>
-      </td>
+      <td>${t.user ? escape(u ? u.name : 'Unknown') : 'TBC'}</td>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
       <td><span class="status ${isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)}">${isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)}</span></td>
       <td>${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}</td>
-      ${isAdmin() ? `<td>${t.score != null ? '<span class="score">'+t.score+'/5<br><small>'+scoreLabel(t.score)+'</small></span>' : '-'}</td>` : ''}
+      ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
     </tr>`;
     if (expandedTaskId === t.id) {
       html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
-        <strong>${escape(t.title)}</strong><br>
-        <small>Type: ${escape(t.type||'')} · Target: ${t.targetDate||'-'}</small>
-        <p>${escape(t.description||'(no description)')}</p>
+        <strong>${escape(t.title)}</strong><p>${escape(t.description||'')}</p>
         ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
-        ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept as mine</button>` : ''}
+        ${t.acceptance === 'open' ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
-        ${isAdmin() ? `<div class="actions" style="margin-top:8px;"><button class="small" onclick="addComment('${t.id}')">Comment</button> <button class="small secondary" onclick="setScore('${t.id}')">Score</button></div>` : ''}
+        ${isAdmin() ? `<button class="small" onclick="addComment('${t.id}')">Comment</button> <button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
       </td></tr>`;
     }
   });
@@ -429,70 +358,53 @@ function renderAll() {
 function renderMy() {
   const mine = tasks.filter(t => t.user === currentUser.uid || t.acceptance === 'open');
   const el = document.getElementById('my-tasks-list');
-  if (!mine.length) { el.innerHTML = '<p>No tasks assigned to you yet.</p>'; return; }
-  let html = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Created</th><th>Target</th><th>Status</th></tr></thead><tbody>';
-  mine.forEach(t => {
-    html += `<tr>
-      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span>${t.acceptance==='open'?' <small>(Open)</small>':''}</td>
-      <td>${(t.created && t.created.toDate ? t.created.toDate().toISOString().slice(0,10) : '-')}</td>
-      <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${isOverdue(t)?'overdue':t.status}">${isOverdue(t)?'Overdue':t.status}</span></td>
-    </tr>`;
-  });
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
+  if (!mine.length) { el.innerHTML = '<p>No tasks.</p>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>' +
+    mine.map(t => `<tr><td>${escape(t.title)}</td><td>${t.targetDate||'-'}</td><td>${t.status}</td></tr>`).join('') +
+    '</tbody></table></div>';
 }
 
 function renderDashboard() {
   const completed = tasks.filter(t => t.status === 'completed').length;
   const overdue = tasks.filter(isOverdue).length;
-  const pending = tasks.filter(t => t.acceptance === 'pending' || t.acceptance === 'open').length;
-  const start = new Date('2025-05-12');
-  const end = new Date('2029-02-09');
-  const now = new Date();
+  const start = new Date('2025-05-12'); const end = new Date('2029-02-09'); const now = new Date();
   const totalDays = Math.round((end - start) / 86400000);
   const passedDays = Math.max(0, Math.round((now - start) / 86400000));
-  const prog = Math.min(100, Math.max(0, Math.round(passedDays / totalDays * 100)));
+  const prog = Math.min(100, Math.round(passedDays / totalDays * 100));
   document.getElementById('prog-version').textContent = '· ' + progVersion;
   document.getElementById('dash-content').innerHTML = `
-    <div class="dash-stat"><strong>${prog}%</strong>Programme elapsed<br><small>${passedDays} / ${totalDays} days</small></div>
+    <div class="dash-stat"><strong>${prog}%</strong>Elapsed<br><small>${passedDays}/${totalDays} days</small></div>
     <div class="dash-stat"><strong>${completed}</strong>Completed</div>
     <div class="dash-stat"><strong>${tasks.length - completed}</strong>Open</div>
     <div class="dash-stat"><strong>${overdue}</strong>Overdue</div>
-    <div class="dash-stat"><strong>${pending}</strong>Pending / TBC</div>
   `;
-  document.getElementById('announcement-text').textContent = announcement || '(No announcement)';
+  document.getElementById('announcement-text').textContent = announcement;
   if (isAdmin()) document.getElementById('announcement-edit').value = announcement;
   const todayStr = today();
   const active = programme.filter(a => a.start <= todayStr && a.finish >= todayStr);
-  let actHtml = '<strong>Activities on this date:</strong>';
-  if (active.length) {
-    active.forEach(a => actHtml += `<div class="prog-activity">${escape(a.activity)} (${a.start} – ${a.finish})</div>`);
-  } else {
-    actHtml += '<div class="prog-activity">No programme activities exactly on today.</div>';
-  }
-  document.getElementById('today-activities').innerHTML = actHtml;
+  document.getElementById('today-activities').innerHTML = '<strong>Today:</strong>' + (active.length ? active.map(a => `<div class="prog-activity">${escape(a.activity)}</div>`).join('') : '<div class="prog-activity">None</div>');
 }
 
 function populateUserFilter() {
   const sel = document.getElementById('filter-user');
+  if (!sel) return;
   sel.innerHTML = '<option value="">All</option>';
-  users.forEach(u => { sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`; });
+  users.forEach(u => sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`);
+}
+
+function populateAssign() {
+  const sel = document.getElementById('task-assign');
+  if (!sel) return;
+  sel.innerHTML = '<option value="self">Myself</option><option value="TBC">TBC (open)</option>';
+  users.forEach(u => { if (u.uid !== currentUser.uid) sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`; });
 }
 
 function updateInboxBadge() {
   const badge = document.getElementById('inbox-badge');
+  if (!badge) return;
   const unread = inbox.filter(m => !m.read).length;
   badge.textContent = unread;
   badge.classList.toggle('hidden', unread === 0);
-}
-
-function renderInbox() {
-  const el = document.getElementById('inbox-list');
-  if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
-  el.innerHTML = inbox.map(m => `<div style="padding:8px 0; border-bottom:1px solid #eee;"><strong>${escape(m.subject||'')}</strong><br><small>${escape(m.message||'')}</small>
-    ${m.taskId ? `<div class="actions" style="margin-top:6px;"><button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button></div>` : ''}
-  </div>`).join('');
 }
 
 function renderPerf() {
@@ -513,7 +425,6 @@ function renderPerf() {
       progVersion,
       programme: [
         { activity: 'Access / Start on site', start: '2025-05-12', finish: '2025-05-12' },
-        { activity: 'Shop drawing schedule Annex C (ACMV)', start: '2026-08-17', finish: '2026-09-15' },
         { activity: 'Contract completion', start: '2029-02-09', finish: '2029-02-09' }
       ]
     });
@@ -523,9 +434,8 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Firebase Auth) v5</small> <span id="admin-debug" style="font-size:0.7rem; background:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;"></span></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online)</small></h1>
   <div id="user-info"></div>
-  <button id="force-admin-btn" onclick="forceAdmin()" class="small secondary" style="display:none;">Enable Admin</button>
 </header>
 <div class="container">
   <div id="auth-section" class="login-box card">
@@ -534,7 +444,7 @@ function renderPerf() {
       <button id="tab-register" onclick="showAuth('register')">Register</button>
     </div>
     <form id="login-form">
-      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="admin or admin@newland.com.hk"></div>
+      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="admin"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="login-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Login</button>
     </form>
@@ -545,6 +455,7 @@ function renderPerf() {
       <button type="submit" style="width:100%;">Create Account</button>
     </form>
     <p id="auth-error" style="color:#b91c1c; font-size:0.9rem; margin-top:8px;"></p>
+    <p style="font-size:0.8rem; color:#64748b;">Register <strong>admin</strong> first to create the admin account.</p>
   </div>
 
   <div id="app-section" class="hidden">
@@ -568,7 +479,7 @@ function renderPerf() {
       </div>
     </div>
 
-    <div class="tabs" id="main-tabs">
+    <div class="tabs">
       <button onclick="showView('all')">All Tasks</button>
       <button onclick="showView('my')">My Tasks</button>
       <button onclick="showView('add')">Add Task</button>
@@ -587,16 +498,13 @@ function renderPerf() {
         <div><label>Status</label><select id="filter-status" style="width:100%;"><option value="">All</option>
           <option value="not-started">Not Started</option><option value="in-progress">In Progress</option>
           <option value="completed">Completed</option><option value="overdue">Overdue</option>
-          <option value="pending">Pending Acceptance</option>
+          <option value="pending">Pending</option>
         </select></div>
       </div>
       <div id="all-tasks-list"></div>
     </div>
 
-    <div id="view-my" class="card hidden">
-      <h2>My Tasks</h2>
-      <div id="my-tasks-list"></div>
-    </div>
+    <div id="view-my" class="card hidden"><h2>My Tasks</h2><div id="my-tasks-list"></div></div>
 
     <div id="view-add" class="card hidden">
       <h2>Add Task</h2>
@@ -605,12 +513,9 @@ function renderPerf() {
           <div><label>Task Title *</label><input type="text" id="task-title" required style="width:100%;"></div>
           <div><label>Type</label>
             <select id="task-type" style="width:100%;">
-              <option>Drawing submission</option>
-              <option>Document submission</option>
-              <option>Coordination</option>
-              <option>Calculation</option>
-              <option>Material Submission</option>
-              <option>Others</option>
+              <option>Drawing submission</option><option>Document submission</option>
+              <option>Coordination</option><option>Calculation</option>
+              <option>Material Submission</option><option>Others</option>
             </select>
           </div>
           <div><label>Target Completion Date *</label><input type="date" id="task-target" required style="width:100%;"></div>
@@ -625,21 +530,17 @@ function renderPerf() {
             <label>Assign to</label>
             <select id="task-assign" style="width:100%;">
               <option value="self">Myself</option>
-              <option value="TBC">TBC (open for anyone to accept)</option>
+              <option value="TBC">TBC (open)</option>
             </select>
           </div>
         </div>
-        <div style="margin-top:12px;"><label>Description / Notes</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
+        <div style="margin-top:12px;"><label>Description</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
         <div style="margin-top:12px;"><button type="submit">Save Task</button></div>
       </form>
     </div>
 
-    <div id="view-inbox" class="card hidden">
-      <h2>Inbox</h2>
-      <div id="inbox-list"></div>
-    </div>
-
-    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Account settings available in future update.</p></div>
+    <div id="view-inbox" class="card hidden"><h2>Inbox</h2><div id="inbox-list"></div></div>
+    <div id="view-settings" class="card hidden"><h2>Settings</h2><p>Online version.</p></div>
     <div id="view-perf" class="card hidden">
       <h2>Performance</h2>
       <div id="perf-summary" class="summary-grid"></div>
