@@ -106,7 +106,24 @@ function isAdmin() {
   if (!currentUser) return false;
   const email = (currentUser.email || '').toLowerCase();
   const name = (currentUser.name || '').toLowerCase();
-  return email === ADMIN_EMAIL || email.startsWith('admin@') || name === 'admin' || currentUser.role === 'admin';
+  // Force admin for any account named "admin" or email starting with admin
+  if (name === 'admin' || email.startsWith('admin') || email === ADMIN_EMAIL || currentUser.role === 'admin') return true;
+  return false;
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  const perf = document.getElementById('admin-perf');
+  const ann = document.getElementById('admin-announcement');
+  const prog = document.getElementById('admin-prog-upload');
+  const assign = document.getElementById('assign-box');
+  if (perf) perf.classList.toggle('hidden', !admin);
+  if (ann) ann.classList.toggle('hidden', !admin);
+  if (prog) prog.classList.toggle('hidden', !admin);
+  if (assign) assign.classList.toggle('hidden', !admin);
+  // Debug indicator
+  const dbg = document.getElementById('admin-debug');
+  if (dbg) dbg.textContent = admin ? 'ADMIN MODE' : 'user mode';
 }
 function today() { return new Date().toISOString().slice(0,10); }
 function daysUntil(dateStr) {
@@ -181,13 +198,8 @@ onAuthStateChanged(auth, async (user) => {
         await setDoc(doc(db, 'users', user.uid), { role: 'admin' }, { merge: true });
       }
       document.getElementById('user-info').innerHTML = `${currentUser.name} <small style="opacity:0.7">(${currentUser.email||''})</small> <button onclick="logout()" class="secondary small">Logout</button>`;
-      setTimeout(() => {
-        document.getElementById('admin-perf').classList.toggle('hidden', !isAdmin());
-        document.getElementById('admin-announcement').classList.toggle('hidden', !isAdmin());
-        document.getElementById('admin-prog-upload').classList.toggle('hidden', !isAdmin());
-        document.getElementById('assign-box').classList.toggle('hidden', !isAdmin());
-        render();
-      }, 300);
+      updateAdminUI();
+      setTimeout(updateAdminUI, 500);
     } catch (err) {
       console.warn(err);
       currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
@@ -505,7 +517,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Firebase Auth) v3</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Firebase Auth) v4</small> <span id="admin-debug" style="font-size:0.7rem; background:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;"></span></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
