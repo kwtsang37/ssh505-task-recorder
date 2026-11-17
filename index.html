@@ -111,7 +111,13 @@ function isAdmin() {
   return false;
 }
 
-function updateAdminUI() {
+window.forceAdmin = function() {
+  if (!currentUser) return;
+  currentUser.role = 'admin';
+  currentUser.name = currentUser.name || 'admin';
+  updateAdminUI();
+  alert('Admin mode enabled for this session.');
+};
   const admin = isAdmin();
   const perf = document.getElementById('admin-perf');
   const ann = document.getElementById('admin-announcement');
@@ -198,8 +204,8 @@ onAuthStateChanged(auth, async (user) => {
         await setDoc(doc(db, 'users', user.uid), { role: 'admin' }, { merge: true });
       }
       document.getElementById('user-info').innerHTML = `${currentUser.name} <small style="opacity:0.7">(${currentUser.email||''})</small> <button onclick="logout()" class="secondary small">Logout</button>`;
+      document.getElementById('force-admin-btn').style.display = 'inline-block';
       updateAdminUI();
-      setTimeout(updateAdminUI, 500);
     } catch (err) {
       console.warn(err);
       currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
@@ -517,8 +523,9 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Firebase Auth) v4</small> <span id="admin-debug" style="font-size:0.7rem; background:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;"></span></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Firebase Auth) v5</small> <span id="admin-debug" style="font-size:0.7rem; background:#ef4444; padding:2px 6px; border-radius:4px; margin-left:8px;"></span></h1>
   <div id="user-info"></div>
+  <button id="force-admin-btn" onclick="forceAdmin()" class="small secondary" style="display:none;">Enable Admin</button>
 </header>
 <div class="container">
   <div id="auth-section" class="login-box card">
