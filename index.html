@@ -344,13 +344,18 @@ onAuthStateChanged(auth, async (user) => {
     }
     startListeners();
     showView('all');
-    // Remind admin if tasks are due soon
+    // Remind admin only if there are NEW tasks due within 3 days
     if (isAdmin()) {
       setTimeout(async () => {
-        const dueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3);
-        if (dueSoon.length) {
+        const newDueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3 && !t.adminReminded);
+        if (newDueSoon.length) {
           const adminEmail = await getAdminEmail();
-          await sendEmail(adminEmail, 'Reminder: tasks due within 3 days', `There are ${dueSoon.length} task(s) due within 3 days. Please log in and click "Send Due Soon (≤3 days)" in Settings to notify the owners.`);
+          const titles = newDueSoon.map(t => t.title).join(', ');
+          await sendEmail(adminEmail, 'New tasks due within 3 days', `There are ${newDueSoon.length} new task(s) due within 3 days: ${titles}. Please log in and use the reminder buttons in Settings to notify the owners.`);
+          // Mark as admin-reminded so we don't email again for these
+          for (const t of newDueSoon) {
+            await updateDoc(doc(db, 'tasks', t.id), { adminReminded: true });
+          }
         }
       }, 3000);
     }
@@ -859,6 +864,15 @@ function renderInbox() {
   }).join('');
 }
 
+let sortField = 'targetDate';
+let sortDir = 'asc';
+
+window.sortTasks = function(field) {
+  if (sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortField = field; sortDir = 'asc'; }
+  renderAll();
+};
+
 function renderAll() {
   const uf = document.getElementById('filter-user').value;
   const tf = document.getElementById('filter-type').value;
@@ -869,9 +883,28 @@ function renderAll() {
   if (sf === 'overdue') list = list.filter(isOverdue);
   else if (sf === 'pending') list = list.filter(t => t.acceptance === 'pending' || t.acceptance === 'open');
   else if (sf) list = list.filter(t => t.status === sf);
+  // Sort
+  list.sort((a, b) => {
+    let va, vb;
+    if (sortField === 'user') { va = (users.find(u=>u.uid===a.user)?.name || 'TBC'); vb = (users.find(u=>u.uid===b.user)?.name || 'TBC'); }
+    else if (sortField === 'title') { va = a.title || ''; vb = b.title || ''; }
+    else if (sortField === 'targetDate') { va = a.targetDate || ''; vb = b.targetDate || ''; }
+    else if (sortField === 'status') { va = a.status || ''; vb = b.status || ''; }
+    else { va = ''; vb = ''; }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const arrow = (f) => sortField === f ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
   const el = document.getElementById('all-tasks-list');
   if (!list.length) { el.innerHTML = '<p>No matching tasks.</p>'; return; }
-  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th onclick="sortTasks('user')" style="cursor:pointer;">User${arrow('user')}</th>
+    <th onclick="sortTasks('title')" style="cursor:pointer;">Task${arrow('title')}</th>
+    <th onclick="sortTasks('targetDate')" style="cursor:pointer;">Target${arrow('targetDate')}</th>
+    <th onclick="sortTasks('status')" style="cursor:pointer;">Status${arrow('status')}</th>
+    <th></th>${isAdmin()?'<th>Score</th>':''}
+  </tr></thead><tbody>`;
   list.forEach(t => {
     const u = users.find(x => x.uid === t.user);
     const canComplete = t.user === currentUser.uid && t.status !== 'completed';
@@ -1045,7 +1078,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v13.1</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v13.4</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
