@@ -344,6 +344,16 @@ onAuthStateChanged(auth, async (user) => {
     }
     startListeners();
     showView('all');
+    // Remind admin if tasks are due soon
+    if (isAdmin()) {
+      setTimeout(async () => {
+        const dueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3);
+        if (dueSoon.length) {
+          const adminEmail = await getAdminEmail();
+          await sendEmail(adminEmail, 'Reminder: tasks due within 3 days', `There are ${dueSoon.length} task(s) due within 3 days. Please log in and click "Send Due Soon (≤3 days)" in Settings to notify the owners.`);
+        }
+      }, 3000);
+    }
   } else {
     currentUser = null;
     if (unsubTasks) unsubTasks();
@@ -424,6 +434,7 @@ window.showView = function(v) {
   if (v === 'settings') { 
     renderPending(); 
     renderUserList(); 
+    renderDueSoon();
     getAdminEmail().then(e => { const el = document.getElementById('admin-notify-email'); if (el) el.value = e; });
   }
   render();
@@ -478,6 +489,29 @@ window.deleteTask = async function(id) {
     await deleteDoc(doc(db, 'tasks', id));
     expandedTaskId = null;
   } catch (err) { alert('Delete failed: ' + err.message); }
+};
+
+window.releaseTask = async function(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.user !== currentUser.uid) { alert('Only the owner can release this task.'); return; }
+  if (!confirm('Release this task so others can accept it?')) return;
+  try {
+    await updateDoc(doc(db, 'tasks', id), { user: null, acceptance: 'open', status: 'not-started' });
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid,
+        subject: 'Task released',
+        message: `${currentUser.name || 'User'} released "${t.title}" for others to accept.`,
+        taskId: id,
+        date: serverTimestamp(),
+        read: false
+      });
+      const adminEmail = await getAdminEmail();
+      await sendEmail(adminEmail, 'Task released', `${currentUser.name || 'User'} released "${t.title}" for others to accept.`);
+    }
+    alert('Task released.');
+  } catch (err) { alert('Failed: ' + err.message); }
 };
 
 window.requestExtension = async function(id) {
@@ -662,6 +696,45 @@ function renderUserList() {
     }).join('') + '</tbody></table></div>';
 }
 
+window.sendDueSoonOne = async function(id) {
+  if (!isAdmin()) return;
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.reminded) return;
+  const owner = users.find(u => u.uid === t.user);
+  const days = daysUntil(t.targetDate);
+  const msg = `Task: "${t.title}"\nType: ${t.type || '-'}\nTarget: ${t.targetDate}\nDays left: ${days}\n\nPlease complete this task in the Task Recorder.`;
+  if (t.user) {
+    await addDoc(collection(db, 'inbox'), {
+      to: t.user, subject: 'Task due soon: ' + t.title, message: msg, taskId: id, date: serverTimestamp(), read: false
+    });
+    if (owner && owner.email) {
+      await sendEmail(owner.email, 'Task due soon: ' + t.title, msg);
+    }
+  }
+  await updateDoc(doc(db, 'tasks', id), { reminded: true, remindedDate: serverTimestamp() });
+  alert('Reminder sent for "' + t.title + '"');
+  renderDueSoon();
+};
+
+function renderDueSoon() {
+  const el = document.getElementById('due-soon-list');
+  if (!el || !isAdmin()) return;
+  const dueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3);
+  if (!dueSoon.length) { el.innerHTML = '<p>No tasks due within 3 days.</p>'; return; }
+  el.innerHTML = dueSoon.map(t => {
+    const owner = users.find(u => u.uid === t.user);
+    const days = daysUntil(t.targetDate);
+    return `<div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+      <div>
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>${escape(owner ? owner.name : 'TBC')} · Due in ${days} day(s) · ${t.targetDate}</small>
+        ${t.reminded ? '<br><small style="color:#1a7f37;">✓ Reminded</small>' : ''}
+      </div>
+      ${!t.reminded ? `<button class="small" onclick="sendDueSoonOne('${t.id}')">Send Reminder</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
 window.checkOverdue = async function() {
   if (!isAdmin()) return;
   const overdue = tasks.filter(isOverdue);
@@ -765,7 +838,8 @@ function renderInbox() {
     const t = m.taskId ? tasks.find(x => x.id === m.taskId) : null;
     const stillPending = t && (t.acceptance === 'pending' || t.acceptance === 'open');
     return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
-      <strong>${escape(m.subject || 'Message')}</strong><br>
+      <strong>${escape(m.subject || 'Message')}</strong>
+      <small style="color:#656d76; margin-left:8px;">${m.date ? new Date(m.date.toDate ? m.date.toDate() : m.date).toLocaleString() : ''}</small><br>
       <small>${escape(m.message || '')}</small>
       <div class="actions" style="margin-top:6px;">
         ${stillPending ? `<button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button>` : ''}
@@ -799,6 +873,7 @@ function renderAll() {
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
+        ${t.user === currentUser.uid && t.status !== 'completed' ? `<button class="small secondary" onclick="releaseTask('${t.id}')">Release</button>` : ''}
         ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
       </td>
       ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
@@ -960,7 +1035,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11.9</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v12.9</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -1079,6 +1154,10 @@ function renderPerf() {
       <div id="admin-tools" class="hidden" style="margin-top:16px;">
         <h3>Admin Tools</h3>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+        <div style="margin-top:12px;">
+          <h4>Tasks Due Within 3 Days</h4>
+          <div id="due-soon-list"></div>
+        </div>
         <div style="margin-top:16px;">
           <h4>Admin Notification Email</h4>
           <input type="email" id="admin-notify-email" value="kwtsang37@gmail.com" style="width:100%; margin-bottom:6px;">
