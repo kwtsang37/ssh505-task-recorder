@@ -68,7 +68,10 @@
   .comment { background: #f6f8fa; border-left: 3px solid #d0d7de; padding: 8px 12px; margin: 8px 0; font-size: 14px; border-radius: 0 6px 6px 0; }
   .score { font-weight: 600; color: #1f2328; }
 </style>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
+emailjs.init("sRoFQ9Ji6mjNKSCOc");
+
 function showAuth(mode) {
   document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
   document.getElementById('register-form').classList.toggle('hidden', mode !== 'register');
@@ -110,6 +113,19 @@ let programme = [];
 let progVersion = 'Rev. 7 r3 (21 Jul 2026)';
 let expandedTaskId = null;
 let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
+
+async function sendEmail(toEmail, subject, message) {
+  if (!toEmail || !toEmail.includes('@')) return;
+  try {
+    await emailjs.send("service_0kbno3j", "template_81250ji", {
+      to_email: toEmail,
+      subject: subject,
+      message: message
+    });
+  } catch (err) {
+    console.warn('Email send failed:', err);
+  }
+}
 
 function isAdmin() { 
   if (!currentUser) return false;
@@ -201,7 +217,28 @@ document.addEventListener('DOMContentLoaded', () => {
       status: document.getElementById('task-status').value
     };
     if (editId) {
+      const oldTask = tasks.find(x => x.id === editId);
+      const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : null;
+      if (assign && isAdmin()) {
+        data.user = assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign);
+        data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
+      }
       await updateDoc(doc(db, 'tasks', editId), data);
+      // Notify new assignee if changed
+      if (data.user && oldTask && data.user !== oldTask.user && data.acceptance === 'pending') {
+        const newUser = users.find(u => u.uid === data.user);
+        await addDoc(collection(db, 'inbox'), {
+          to: data.user,
+          subject: 'Task assigned to you',
+          message: `You have been assigned the task "${data.title}".`,
+          taskId: editId,
+          date: serverTimestamp(),
+          read: false
+        });
+        if (newUser && newUser.email) {
+          await sendEmail(newUser.email, 'Task assigned to you', `You have been assigned the task "${data.title}" in the Task Recorder.`);
+        }
+      }
       document.getElementById('edit-id').value = '';
     } else {
       const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : 'self';
@@ -212,7 +249,19 @@ document.addEventListener('DOMContentLoaded', () => {
       data.score = null;
       const ref = await addDoc(collection(db, 'tasks'), data);
       if (data.acceptance === 'pending' && data.user) {
+        const newUser = users.find(u => u.uid === data.user);
         await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
+        if (newUser && newUser.email) {
+          await sendEmail(newUser.email, 'Task assigned to you', `You have been assigned the task "${data.title}" in the Task Recorder.`);
+        }
+      }
+      if (data.acceptance === 'open') {
+        // Notify all non-admin users that a new open task is available
+        for (const u of users) {
+          if (u.role !== 'admin' && u.email) {
+            await sendEmail(u.email, 'New open task available', `A new task "${data.title}" is open for anyone to accept in the Task Recorder.`);
+          }
+        }
       }
     }
     document.getElementById('task-form').reset();
@@ -269,13 +318,21 @@ window.logout = async function() {
 
 function startListeners() {
   if (unsubTasks) unsubTasks();
-  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => { tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
+  unsubUsers = onSnapshot(collection(db, 'users'), snap => { 
+    users = snap.docs.map(d => ({ uid: d.id, ...d.data() })); 
+    populateUserFilter(); 
+    populateAssign(); 
+    render();
+  });
+  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => { 
+    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
+    render(); 
+  });
   unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => { 
     inbox = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
     updateInboxBadge(); 
     renderInbox();
   });
-  unsubUsers = onSnapshot(collection(db, 'users'), snap => { users = snap.docs.map(d => ({ uid: d.id, ...d.data() })); populateUserFilter(); populateAssign(); });
   unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
     if (snap.exists()) {
       announcement = snap.data().announcement || announcement;
@@ -299,7 +356,7 @@ window.showView = function(v) {
 window.markCompleted = async function(id) {
   if (!confirm('Mark as Completed?')) return;
   const t = tasks.find(x => x.id === id);
-  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today() });
+  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today(), acceptance: null });
   // Notify admin
   const adminUser = users.find(u => u.role === 'admin' || (u.email || '').toLowerCase().includes('admin'));
   if (adminUser && adminUser.uid !== currentUser.uid) {
@@ -329,6 +386,11 @@ window.editTask = function(id) {
   document.getElementById('task-status').value = t.status || 'not-started';
   document.getElementById('task-desc').value = t.description || '';
   document.getElementById('edit-id').value = id;
+  // Set assign dropdown if admin
+  const assignSel = document.getElementById('task-assign');
+  if (assignSel && isAdmin()) {
+    assignSel.value = t.user || 'TBC';
+  }
   showView('add');
 };
 
@@ -364,6 +426,8 @@ window.requestExtension = async function(id) {
     alert('Extension recorded and admin notified.');
   } catch (err) { alert('Failed: ' + err.message); }
 };
+
+window.acceptTask = async function(id) {
   if (!currentUser) { alert('Not logged in'); return; }
   try {
     const t = tasks.find(x => x.id === id);
@@ -477,6 +541,7 @@ window.checkOverdue = async function() {
   let sent = 0;
   for (const t of overdue) {
     if (t.user) {
+      const owner = users.find(u => u.uid === t.user);
       await addDoc(collection(db, 'inbox'), {
         to: t.user,
         subject: 'Task overdue',
@@ -485,6 +550,9 @@ window.checkOverdue = async function() {
         date: serverTimestamp(),
         read: false
       });
+      if (owner && owner.email) {
+        await sendEmail(owner.email, 'Task overdue', `"${t.title}" is overdue. Please update it in the Task Recorder.`);
+      }
       sent++;
     }
   }
@@ -596,10 +664,10 @@ function renderAll() {
     const u = users.find(x => x.uid === t.user);
     const canComplete = t.user === currentUser.uid && t.status !== 'completed';
     html += `<tr>
-      <td>${t.user ? escape(u ? u.name : 'Unknown') : 'TBC'}</td>
+      <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)}">${isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)}</span></td>
+      <td><span class="status ${t.status==='completed'?'completed':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status))}">${t.status==='completed'?'Completed':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status))}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
@@ -763,7 +831,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v9.7</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v10.4</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
