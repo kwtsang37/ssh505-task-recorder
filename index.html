@@ -224,6 +224,20 @@ document.addEventListener('DOMContentLoaded', () => {
         data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
       }
       await updateDoc(doc(db, 'tasks', editId), data);
+      // Notify admin if status changed from completed
+      if (oldTask && oldTask.status === 'completed' && data.status !== 'completed') {
+        const adminUser = users.find(u => u.role === 'admin');
+        if (adminUser && adminUser.uid !== currentUser.uid) {
+          await addDoc(collection(db, 'inbox'), {
+            to: adminUser.uid,
+            subject: 'Task reopened',
+            message: `${currentUser.name || 'User'} changed "${data.title}" from Completed back to ${data.status}.`,
+            taskId: editId,
+            date: serverTimestamp(),
+            read: false
+          });
+        }
+      }
       // Notify admin if target date changed
       if (oldTask && data.targetDate && data.targetDate !== oldTask.targetDate) {
         const adminUser = users.find(u => u.role === 'admin');
@@ -239,7 +253,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
       // Notify new assignee if changed
-      if (data.user && oldTask && data.user !== oldTask.user && data.acceptance === 'pending') {
+      if (data.user && oldTask && data.user !== oldTask.user && data.acceptance === 'pending' && data.user !== currentUser.uid) {
         const newUser = users.find(u => u.uid === data.user);
         await addDoc(collection(db, 'inbox'), {
           to: data.user,
@@ -262,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
       data.comments = [];
       data.score = null;
       const ref = await addDoc(collection(db, 'tasks'), data);
-      if (data.acceptance === 'pending' && data.user) {
+      if (data.acceptance === 'pending' && data.user && data.user !== currentUser.uid) {
         const newUser = users.find(u => u.uid === data.user);
         await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
         if (newUser && newUser.email) {
@@ -692,6 +706,7 @@ function renderAll() {
       <td><span class="status ${t.status==='completed'?'completed':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status))}">${t.status==='completed'?'Completed':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status))}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
         ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
       </td>
       ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
@@ -706,7 +721,7 @@ function renderAll() {
         <p>${escape(t.description||'(no description)')}</p>
         ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
         <div class="actions" style="margin-top:8px;">
-          ${!isCompleted && canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
           ${!isCompleted && isOwner ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
           ${!isCompleted && isOwner && isOverdue(t) ? `<button class="small" onclick="requestExtension('${t.id}')">Request Extension</button>` : ''}
           ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
@@ -853,7 +868,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v10.7</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
