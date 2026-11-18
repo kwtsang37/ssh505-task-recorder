@@ -224,6 +224,20 @@ document.addEventListener('DOMContentLoaded', () => {
         data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
       }
       await updateDoc(doc(db, 'tasks', editId), data);
+      // Notify admin if target date changed
+      if (oldTask && data.targetDate && data.targetDate !== oldTask.targetDate) {
+        const adminUser = users.find(u => u.role === 'admin');
+        if (adminUser && adminUser.uid !== currentUser.uid) {
+          await addDoc(collection(db, 'inbox'), {
+            to: adminUser.uid,
+            subject: 'Completion date changed',
+            message: `${currentUser.name || 'User'} changed the target date of "${data.title}" from ${oldTask.targetDate || '-'} to ${data.targetDate}.`,
+            taskId: editId,
+            date: serverTimestamp(),
+            read: false
+          });
+        }
+      }
       // Notify new assignee if changed
       if (data.user && oldTask && data.user !== oldTask.user && data.acceptance === 'pending') {
         const newUser = users.find(u => u.uid === data.user);
@@ -349,7 +363,15 @@ function startListeners() {
 
 window.showView = function(v) {
   ['all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
-  if (v === 'inbox') renderInbox();
+  if (v === 'inbox') {
+    renderInbox();
+    // Mark all current inbox messages as read
+    inbox.forEach(async m => {
+      if (!m.read) {
+        await updateDoc(doc(db, 'inbox', m.id), { read: true });
+      }
+    });
+  }
   render();
 };
 
@@ -831,7 +853,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v10.4</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v10.7</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
