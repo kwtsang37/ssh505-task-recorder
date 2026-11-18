@@ -303,6 +303,12 @@ window.markCompleted = async function(id) {
   }
 };
 
+window.toggleTaskDetail = function(id) {
+  expandedTaskId = expandedTaskId === id ? null : id;
+  renderAll();
+  renderMy();
+};
+
 window.editTask = function(id) {
   const t = tasks.find(x => x.id === id);
   if (!t) return;
@@ -366,7 +372,6 @@ window.setScore = async function(id) {
 };
 
 window.addTaskType = async function() {
-  if (!isAdmin()) return;
   const name = prompt('New task type name:');
   if (!name) return;
   const types = [...new Set([...(window._taskTypes || ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others']), name])];
@@ -377,7 +382,8 @@ window.addTaskType = async function() {
 };
 
 function renderTypeDropdowns() {
-  const types = window._taskTypes || ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  const defaults = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  const types = [...new Set([...defaults, ...(window._taskTypes || [])])];
   const opts = types.map(t => `<option>${escape(t)}</option>`).join('');
   const addSel = document.getElementById('task-type');
   const filterSel = document.getElementById('filter-type');
@@ -472,14 +478,18 @@ function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!el) return;
   if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
-  el.innerHTML = inbox.map(m => `<div style="padding:10px 0; border-bottom:1px solid #eee;">
-    <strong>${escape(m.subject || 'Message')}</strong><br>
-    <small>${escape(m.message || '')}</small>
-    <div class="actions" style="margin-top:6px;">
-      ${m.taskId ? `<button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button>` : ''}
-      <button class="small secondary" onclick="deleteInboxMessage('${m.id}')">Delete</button>
-    </div>
-  </div>`).join('');
+  el.innerHTML = inbox.map(m => {
+    const t = m.taskId ? tasks.find(x => x.id === m.taskId) : null;
+    const stillPending = t && (t.acceptance === 'pending' || t.acceptance === 'open');
+    return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
+      <strong>${escape(m.subject || 'Message')}</strong><br>
+      <small>${escape(m.message || '')}</small>
+      <div class="actions" style="margin-top:6px;">
+        ${stillPending ? `<button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button>` : ''}
+        <button class="small secondary" onclick="deleteInboxMessage('${m.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderAll() {
@@ -509,16 +519,17 @@ function renderAll() {
     if (expandedTaskId === t.id) {
       const isOwner = t.user === currentUser.uid;
       const canEdit = isOwner || isAdmin();
+      const isCompleted = t.status === 'completed';
       html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
         <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
         <small>Owner: ${escape(users.find(u=>u.uid===t.user)?.name || 'TBC')} · Target: ${t.targetDate||'-'}</small>
         <p>${escape(t.description||'(no description)')}</p>
         ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
         <div class="actions" style="margin-top:8px;">
-          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
-          ${isOwner && t.status !== 'completed' ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
+          ${!isCompleted && canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${!isCompleted && isOwner ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
           ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
-          <button class="small" onclick="addComment('${t.id}')">Comment</button>
+          ${!isCompleted ? `<button class="small" onclick="addComment('${t.id}')">Comment</button>` : ''}
           ${isAdmin() ? `<button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
           <button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button>
         </div>
@@ -656,12 +667,13 @@ function renderPerf() {
       ]
     });
   }
+  renderTypeDropdowns();
 })();
 </script>
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.0</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.5</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -772,9 +784,12 @@ function renderPerf() {
     <div id="view-settings" class="card hidden">
       <h2>Settings</h2>
       <button type="button" onclick="changePassword()">Change Password</button>
+      <div style="margin-top:16px;">
+        <h3>Task Types</h3>
+        <button type="button" class="small" onclick="addTaskType()">Add New Type</button>
+      </div>
       <div id="admin-tools" class="hidden" style="margin-top:16px;">
         <h3>Admin Tools</h3>
-        <button type="button" class="small" onclick="addTaskType()">Add Task Type</button>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
       </div>
     </div>
