@@ -663,6 +663,16 @@ async function getAdminEmail() {
   } catch (e) { return 'kwtsang37@gmail.com'; }
 }
 
+window.deleteUser = async function(uid) {
+  if (!isAdmin()) return;
+  if (!confirm('Delete this account? This cannot be undone.')) return;
+  try {
+    await deleteDoc(doc(db, 'users', uid));
+    alert('Account deleted.');
+    renderUserList();
+  } catch (err) { alert('Failed: ' + err.message); }
+};
+
 window.approveUser = async function(uid) {
   if (!isAdmin()) return;
   await updateDoc(doc(db, 'users', uid), { role: 'user' });
@@ -686,13 +696,13 @@ function renderUserList() {
   if (!el || !isAdmin()) return;
   const list = users.filter(u => u.role !== 'admin');
   if (!list.length) { el.innerHTML = '<p>No users.</p>'; return; }
-  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Tasks</th><th>Completed</th><th>In Progress</th><th>Overdue</th></tr></thead><tbody>' +
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Tasks</th><th>Completed</th><th>In Progress</th><th>Overdue</th><th></th></tr></thead><tbody>' +
     list.map(u => {
       const userTasks = tasks.filter(t => t.user === u.uid);
       const completed = userTasks.filter(t => t.status === 'completed').length;
       const inProg = userTasks.filter(t => t.status === 'in-progress').length;
       const overdue = userTasks.filter(isOverdue).length;
-      return `<tr><td>${escape(u.name)}</td><td>${userTasks.length}</td><td>${completed}</td><td>${inProg}</td><td>${overdue}</td></tr>`;
+      return `<tr><td>${escape(u.name)}</td><td>${userTasks.length}</td><td>${completed}</td><td>${inProg}</td><td>${overdue}</td><td><button class="small danger" onclick="deleteUser('${u.uid}')">Delete</button></td></tr>`;
     }).join('') + '</tbody></table></div>';
 }
 
@@ -1035,7 +1045,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v12.9</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v13.1</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
