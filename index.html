@@ -204,7 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'pending';
       await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
       if (role === 'pending') {
-        await sendEmail('kwtsang37@gmail.com', 'New account pending approval', `New user registered: ${name} (${email}). Please approve in the Task Recorder Settings.`);
+        const adminEmail = await getAdminEmail();
+        await sendEmail(adminEmail, 'New account pending approval', `New user registered: ${name} (${email}). Please approve in the Task Recorder Settings.`);
         alert('Account created. Waiting for admin approval. You will be notified when approved.');
         await signOut(auth);
       }
@@ -264,6 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
             date: serverTimestamp(),
             read: false
           });
+          const adminEmail = await getAdminEmail();
+          await sendEmail(adminEmail, 'Completion date changed', `${currentUser.name || 'User'} changed the target date of "${data.title}" from ${oldTask.targetDate || '-'} to ${data.targetDate}.`);
         }
       }
       // Notify new assignee if changed
@@ -349,6 +352,19 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
+window.forgotPassword = async function() {
+  const emailInput = document.getElementById('login-user').value.trim();
+  if (!emailInput) { alert('Enter your email or prefix first.'); return; }
+  const email = emailInput.includes('@') ? emailInput : emailInput + '@newland.com.hk';
+  try {
+    const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    await sendPasswordResetEmail(auth, email);
+    alert('Password reset email sent to ' + email + '. Check your inbox.');
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
+};
+
 window.logout = async function() {
   try { await signOut(auth); } catch (e) { console.warn(e); }
   currentUser = null;
@@ -405,7 +421,11 @@ window.showView = function(v) {
       }
     });
   }
-  if (v === 'settings') renderPending();
+  if (v === 'settings') { 
+    renderPending(); 
+    renderUserList(); 
+    getAdminEmail().then(e => { const el = document.getElementById('admin-notify-email'); if (el) el.value = e; });
+  }
   render();
 };
 
@@ -424,6 +444,8 @@ window.markCompleted = async function(id) {
       date: serverTimestamp(),
       read: false
     });
+    const adminEmail = await getAdminEmail();
+    await sendEmail(adminEmail, 'Task completed', `${currentUser.name || 'A user'} marked "${t ? t.title : 'a task'}" as completed. Please score it.`);
   }
 };
 
@@ -478,6 +500,8 @@ window.requestExtension = async function(id) {
         date: serverTimestamp(),
         read: false
       });
+      const adminEmail = await getAdminEmail();
+      await sendEmail(adminEmail, 'Extension requested', `${currentUser.name || 'User'} requested extension for "${t.title}" to ${newDate}. Reason: ${reason}`);
     }
     alert('Extension recorded and admin notified.');
   } catch (err) { alert('Failed: ' + err.message); }
@@ -590,6 +614,21 @@ window.exportCompleted = function() {
   a.click();
 };
 
+window.saveAdminEmail = async function() {
+  if (!isAdmin()) return;
+  const email = document.getElementById('admin-notify-email').value.trim();
+  if (!email) return;
+  await setDoc(doc(db, 'settings', 'main'), { adminNotifyEmail: email }, { merge: true });
+  alert('Admin email saved.');
+};
+
+async function getAdminEmail() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'main'));
+    return snap.exists() && snap.data().adminNotifyEmail ? snap.data().adminNotifyEmail : 'kwtsang37@gmail.com';
+  } catch (e) { return 'kwtsang37@gmail.com'; }
+}
+
 window.approveUser = async function(uid) {
   if (!isAdmin()) return;
   await updateDoc(doc(db, 'users', uid), { role: 'user' });
@@ -606,6 +645,21 @@ function renderPending() {
     ${escape(u.name)} (${escape(u.email)})
     <button class="small success" onclick="approveUser('${u.uid}')" style="margin-left:8px;">Approve</button>
   </div>`).join('');
+}
+
+function renderUserList() {
+  const el = document.getElementById('user-list');
+  if (!el || !isAdmin()) return;
+  const list = users.filter(u => u.role !== 'admin');
+  if (!list.length) { el.innerHTML = '<p>No users.</p>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Tasks</th><th>Completed</th><th>In Progress</th><th>Overdue</th></tr></thead><tbody>' +
+    list.map(u => {
+      const userTasks = tasks.filter(t => t.user === u.uid);
+      const completed = userTasks.filter(t => t.status === 'completed').length;
+      const inProg = userTasks.filter(t => t.status === 'in-progress').length;
+      const overdue = userTasks.filter(isOverdue).length;
+      return `<tr><td>${escape(u.name)}</td><td>${userTasks.length}</td><td>${completed}</td><td>${inProg}</td><td>${overdue}</td></tr>`;
+    }).join('') + '</tbody></table></div>';
 }
 
 window.checkOverdue = async function() {
@@ -906,7 +960,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11.3</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11.9</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -919,6 +973,7 @@ function renderPerf() {
       <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="admin"></div>
       <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="login-pass" required style="width:100%;"></div>
       <button type="submit" style="width:100%;">Login</button>
+      <p style="margin-top:12px; text-align:center;"><a href="#" onclick="forgotPassword(); return false;" style="font-size:13px; color:#0969da;">Forgot password?</a></p>
     </form>
     <form id="register-form" class="hidden">
       <div style="margin-bottom:12px;"><label>Email prefix (becomes name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
@@ -1025,8 +1080,30 @@ function renderPerf() {
         <h3>Admin Tools</h3>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
         <div style="margin-top:16px;">
-          <h4>Pending Approvals</h4>
-          <div id="pending-list"></div>
+          <h4>Admin Notification Email</h4>
+          <input type="email" id="admin-notify-email" value="kwtsang37@gmail.com" style="width:100%; margin-bottom:6px;">
+          <button type="button" class="small" onclick="saveAdminEmail()">Save Email</button>
+          <p style="font-size:12px; color:#656d76; margin-top:4px;">Receives: new account, task completed, date change, extension request.</p>
+        </div>
+        <div style="margin-top:16px;">
+          <h4>User List & Task Status</h4>
+          <div id="user-list"></div>
+        </div>
+        <div style="margin-top:16px;">
+          <h4>Version History</h4>
+          <div style="font-size:13px; color:#656d76; max-height:200px; overflow-y:auto;">
+            <p><b>v11.4</b> — Forgot password, password confirm, admin approval for new accounts</p>
+            <p><b>v11.1</b> — Fix completed → in-progress status display</p>
+            <p><b>v11</b> — Accept/Reject buttons in main task list</p>
+            <p><b>v10.9</b> — Edit completed tasks, notify admin on reopen</p>
+            <p><b>v10.8</b> — Assignment notification goes only to assigned user</p>
+            <p><b>v10.6</b> — Inbox badge counts unread messages only</p>
+            <p><b>v10.5</b> — Notify admin on target date change</p>
+            <p><b>v10.4</b> — Completed status shows correctly after Complete</p>
+            <p><b>v10.1</b> — Email notifications (overdue, assigned, open)</p>
+            <p><b>v9.7</b> — Request Extension for overdue tasks</p>
+            <p><b>v9</b> — GitHub-style UI</p>
+          </div>
         </div>
         <div style="margin-top:16px;">
           <h4>Export Completed Tasks</h4>
