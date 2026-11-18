@@ -186,22 +186,28 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('task-form').onsubmit = async (e) => {
     e.preventDefault();
     if (!currentUser) return;
-    const assign = document.getElementById('task-assign').value;
+    const editId = document.getElementById('edit-id').value;
     const data = {
       title: document.getElementById('task-title').value.trim(),
       type: document.getElementById('task-type').value,
       description: document.getElementById('task-desc').value.trim(),
       targetDate: document.getElementById('task-target').value,
-      status: document.getElementById('task-status').value,
-      user: assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign),
-      acceptance: assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending'),
-      created: serverTimestamp(),
-      comments: [],
-      score: null
+      status: document.getElementById('task-status').value
     };
-    const ref = await addDoc(collection(db, 'tasks'), data);
-    if (data.acceptance === 'pending' && data.user) {
-      await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
+    if (editId) {
+      await updateDoc(doc(db, 'tasks', editId), data);
+      document.getElementById('edit-id').value = '';
+    } else {
+      const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : 'self';
+      data.user = assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign);
+      data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
+      data.created = serverTimestamp();
+      data.comments = [];
+      data.score = null;
+      const ref = await addDoc(collection(db, 'tasks'), data);
+      if (data.acceptance === 'pending' && data.user) {
+        await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
+      }
     }
     document.getElementById('task-form').reset();
     showView('all');
@@ -265,6 +271,10 @@ function startListeners() {
       announcement = snap.data().announcement || announcement;
       programme = snap.data().programme || programme;
       progVersion = snap.data().progVersion || progVersion;
+      if (snap.data().taskTypes) {
+        window._taskTypes = snap.data().taskTypes;
+        renderTypeDropdowns();
+      }
     }
     renderDashboard();
   });
@@ -293,26 +303,58 @@ window.markCompleted = async function(id) {
   }
 };
 
-window.toggleTaskDetail = function(id) { expandedTaskId = expandedTaskId === id ? null : id; renderAll(); };
+window.editTask = function(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('task-title').value = t.title || '';
+  document.getElementById('task-type').value = t.type || '';
+  document.getElementById('task-target').value = t.targetDate || '';
+  document.getElementById('task-status').value = t.status || 'not-started';
+  document.getElementById('task-desc').value = t.description || '';
+  document.getElementById('edit-id').value = id;
+  showView('add');
+};
+
+window.deleteTask = async function(id) {
+  if (!confirm('Delete this task?')) return;
+  try {
+    await deleteDoc(doc(db, 'tasks', id));
+    expandedTaskId = null;
+  } catch (err) { alert('Delete failed: ' + err.message); }
+};
 
 window.acceptTask = async function(id) {
-  await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
+  if (!currentUser) { alert('Not logged in'); return; }
+  try {
+    await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
+    alert('Task accepted.');
+  } catch (err) { alert('Accept failed: ' + err.message); }
 };
 
 window.rejectTask = async function(id) {
-  const reason = prompt('Reason:');
+  if (!currentUser) { alert('Not logged in'); return; }
+  const reason = prompt('Reason for rejection:');
   if (!reason) return;
-  await updateDoc(doc(db, 'tasks', id), { acceptance: 'rejected', user: null, status: 'not-started' });
+  try {
+    await updateDoc(doc(db, 'tasks', id), { acceptance: 'rejected', user: null, status: 'not-started' });
+    alert('Task rejected.');
+  } catch (err) { alert('Reject failed: ' + err.message); }
+};
+
+window.deleteInboxMessage = async function(id) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    await deleteDoc(doc(db, 'inbox', id));
+  } catch (err) { alert('Delete failed: ' + err.message); }
 };
 
 window.addComment = async function(id) {
-  if (!isAdmin()) return;
   const comment = prompt('Add comment:');
   if (!comment) return;
   const t = tasks.find(x => x.id === id);
   if (!t) return;
   const comments = t.comments || [];
-  comments.push((currentUser.name || 'Admin') + ': ' + comment);
+  comments.push((currentUser.name || 'User') + ': ' + comment);
   await updateDoc(doc(db, 'tasks', id), { comments });
 };
 
@@ -327,11 +369,21 @@ window.addTaskType = async function() {
   if (!isAdmin()) return;
   const name = prompt('New task type name:');
   if (!name) return;
-  const types = [...new Set([...(window._taskTypes || []), name])];
+  const types = [...new Set([...(window._taskTypes || ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others']), name])];
   window._taskTypes = types;
   await setDoc(doc(db, 'settings', 'main'), { taskTypes: types }, { merge: true });
-  alert('Type added. Refresh to see it in the dropdown.');
+  renderTypeDropdowns();
+  alert('Type added.');
 };
+
+function renderTypeDropdowns() {
+  const types = window._taskTypes || ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  const opts = types.map(t => `<option>${escape(t)}</option>`).join('');
+  const addSel = document.getElementById('task-type');
+  const filterSel = document.getElementById('filter-type');
+  if (addSel) addSel.innerHTML = opts;
+  if (filterSel) filterSel.innerHTML = '<option value="">All</option>' + opts;
+}
 
 window.checkOverdue = async function() {
   const overdue = tasks.filter(isOverdue);
@@ -455,12 +507,23 @@ function renderAll() {
       ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
     </tr>`;
     if (expandedTaskId === t.id) {
+      const isOwner = t.user === currentUser.uid;
+      const canEdit = isOwner || isAdmin();
       html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
-        <strong>${escape(t.title)}</strong><p>${escape(t.description||'')}</p>
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>Owner: ${escape(users.find(u=>u.uid===t.user)?.name || 'TBC')} · Target: ${t.targetDate||'-'}</small>
+        <p>${escape(t.description||'(no description)')}</p>
         ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
-        ${t.acceptance === 'open' ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
-        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
-        ${isAdmin() ? `<button class="small" onclick="addComment('${t.id}')">Comment</button> <button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
+        <div class="actions" style="margin-top:8px;">
+          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${isOwner && t.status !== 'completed' ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
+          ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
+          <button class="small" onclick="addComment('${t.id}')">Comment</button>
+          ${isAdmin() ? `<button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
+          <button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button>
+        </div>
+        ${t.acceptance === 'open' ? `<button class="small success" onclick="acceptTask('${t.id}')" style="margin-top:6px;">Accept as mine</button>` : ''}
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<div class="actions" style="margin-top:6px;"><button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button></div>` : ''}
       </td></tr>`;
     }
   });
@@ -598,7 +661,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v7.6</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.0</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -701,6 +764,7 @@ function renderPerf() {
         </div>
         <div style="margin-top:12px;"><label>Description</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
         <div style="margin-top:12px;"><button type="submit">Save Task</button></div>
+        <input type="hidden" id="edit-id">
       </form>
     </div>
 
