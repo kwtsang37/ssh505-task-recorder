@@ -332,7 +332,20 @@ window.deleteTask = async function(id) {
 window.acceptTask = async function(id) {
   if (!currentUser) { alert('Not logged in'); return; }
   try {
+    const t = tasks.find(x => x.id === id);
     await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
+    // Notify admin
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser && adminUser.uid !== currentUser.uid) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid,
+        subject: 'Task accepted',
+        message: `${currentUser.name || 'A user'} accepted the open task "${t ? t.title : ''}".`,
+        taskId: id,
+        date: serverTimestamp(),
+        read: false
+      });
+    }
     alert('Task accepted.');
   } catch (err) { alert('Accept failed: ' + err.message); }
 };
@@ -351,6 +364,9 @@ window.deleteInboxMessage = async function(id) {
   if (!confirm('Delete this message?')) return;
   try {
     await deleteDoc(doc(db, 'inbox', id));
+    inbox = inbox.filter(m => m.id !== id);
+    renderInbox();
+    updateInboxBadge();
   } catch (err) { alert('Delete failed: ' + err.message); }
 };
 
@@ -392,15 +408,26 @@ function renderTypeDropdowns() {
 }
 
 window.checkOverdue = async function() {
+  if (!isAdmin()) return;
   const overdue = tasks.filter(isOverdue);
+  if (!overdue.length) { alert('No overdue tasks.'); return; }
+  const adminUser = users.find(u => u.role === 'admin');
+  let sent = 0;
   for (const t of overdue) {
     if (t.user) {
       await addDoc(collection(db, 'inbox'), {
-        to: t.user, subject: 'Task overdue', message: `"${t.title}" is overdue.`, date: serverTimestamp(), read: false
+        to: t.user, subject: 'Task overdue', message: `"${t.title}" is overdue. Please update it.`, date: serverTimestamp(), read: false
       });
+      sent++;
+    }
+    if (adminUser && adminUser.uid !== t.user) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid, subject: 'Task overdue', message: `"${t.title}" (owner: ${users.find(u=>u.uid===t.user)?.name || 'unknown'}) is overdue.`, date: serverTimestamp(), read: false
+      });
+      sent++;
     }
   }
-  if (overdue.length) alert(overdue.length + ' overdue notification(s) sent.');
+  alert(sent + ' overdue notification(s) sent.');
 };
 
 window.changePassword = async function() {
@@ -413,9 +440,16 @@ window.changePassword = async function() {
   } catch (err) {
     alert('Failed: ' + err.message + '\nYou may need to re-login first.');
   }
+};
+
 window.deleteInboxMessage = async function(id) {
   if (!confirm('Delete this message?')) return;
-  await deleteDoc(doc(db, 'inbox', id));
+  try {
+    await deleteDoc(doc(db, 'inbox', id));
+    inbox = inbox.filter(m => m.id !== id);
+    renderInbox();
+    updateInboxBadge();
+  } catch (err) { alert('Delete failed: ' + err.message); }
 };
 
 window.renderIndividual = function() {
@@ -513,7 +547,10 @@ function renderAll() {
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
       <td><span class="status ${isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)}">${isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)}</span></td>
-      <td>${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}</td>
+      <td>
+        ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
+        ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
+      </td>
       ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
     </tr>`;
     if (expandedTaskId === t.id) {
@@ -673,7 +710,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.5</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.8</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
