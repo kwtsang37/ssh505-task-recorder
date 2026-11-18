@@ -194,10 +194,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (email && !email.includes('@')) email += '@newland.com.hk';
     const name = document.getElementById('reg-name').value.trim();
     const pass = document.getElementById('reg-pass').value;
+    const pass2 = document.getElementById('reg-pass2').value;
+    if (pass !== pass2) {
+      document.getElementById('auth-error').textContent = 'Passwords do not match.';
+      return;
+    }
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'user';
+      const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'pending';
       await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
+      if (role === 'pending') {
+        await sendEmail('kwtsang37@gmail.com', 'New account pending approval', `New user registered: ${name} (${email}). Please approve in the Task Recorder Settings.`);
+        alert('Account created. Waiting for admin approval. You will be notified when approved.');
+        await signOut(auth);
+      }
     } catch (err) {
       document.getElementById('auth-error').textContent = err.message;
       btn.textContent = 'Create Account';
@@ -222,6 +232,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (assign && isAdmin()) {
         data.user = assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign);
         data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
+      }
+      // Clear acceptance if status is changed to in-progress or completed
+      if (data.status === 'in-progress' || data.status === 'completed') {
+        data.acceptance = null;
       }
       await updateDoc(doc(db, 'tasks', editId), data);
       // Notify admin if status changed from completed
@@ -309,6 +323,11 @@ onAuthStateChanged(auth, async (user) => {
       // Fallback if name/email missing from Firestore
       if (!currentUser.email) currentUser.email = user.email;
       if (!currentUser.name) currentUser.name = user.email ? user.email.split('@')[0] : 'Admin';
+      if (currentUser.role === 'pending') {
+        alert('Your account is pending admin approval.');
+        await signOut(auth);
+        return;
+      }
       if ((currentUser.email || '').toLowerCase().includes('admin') || (currentUser.name || '').toLowerCase().includes('admin')) {
         currentUser.role = 'admin';
         await setDoc(doc(db, 'users', user.uid), { role: 'admin', email: currentUser.email, name: currentUser.name }, { merge: true });
@@ -386,6 +405,7 @@ window.showView = function(v) {
       }
     });
   }
+  if (v === 'settings') renderPending();
   render();
 };
 
@@ -570,6 +590,24 @@ window.exportCompleted = function() {
   a.click();
 };
 
+window.approveUser = async function(uid) {
+  if (!isAdmin()) return;
+  await updateDoc(doc(db, 'users', uid), { role: 'user' });
+  alert('User approved.');
+  renderPending();
+};
+
+function renderPending() {
+  const el = document.getElementById('pending-list');
+  if (!el || !isAdmin()) return;
+  const pending = users.filter(u => u.role === 'pending');
+  if (!pending.length) { el.innerHTML = '<p>No pending accounts.</p>'; return; }
+  el.innerHTML = pending.map(u => `<div style="padding:6px 0; border-bottom:1px solid #eee;">
+    ${escape(u.name)} (${escape(u.email)})
+    <button class="small success" onclick="approveUser('${u.uid}')" style="margin-left:8px;">Approve</button>
+  </div>`).join('');
+}
+
 window.checkOverdue = async function() {
   if (!isAdmin()) return;
   const overdue = tasks.filter(isOverdue);
@@ -703,7 +741,7 @@ function renderAll() {
       <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${t.status==='completed'?'completed':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status))}">${t.status==='completed'?'Completed':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status))}</span></td>
+      <td><span class="status ${t.status==='completed'?'completed':(t.status==='in-progress'?'in-progress':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)))}">${t.status==='completed'?'Completed':(t.status==='in-progress'?'In Progress':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)))}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
@@ -868,7 +906,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v11.3</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -885,7 +923,8 @@ function renderPerf() {
     <form id="register-form" class="hidden">
       <div style="margin-bottom:12px;"><label>Email prefix (becomes name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
       <div style="margin-bottom:12px;"><label>Display Name</label><input type="text" id="reg-name" required style="width:100%;"></div>
-      <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="reg-pass" required style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="reg-pass" required minlength="6" style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Confirm Password</label><input type="password" id="reg-pass2" required minlength="6" style="width:100%;"></div>
       <button type="submit" style="width:100%;">Create Account</button>
     </form>
     <p id="auth-error" style="color:#b91c1c; font-size:0.9rem; margin-top:8px;"></p>
@@ -985,6 +1024,10 @@ function renderPerf() {
       <div id="admin-tools" class="hidden" style="margin-top:16px;">
         <h3>Admin Tools</h3>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+        <div style="margin-top:16px;">
+          <h4>Pending Approvals</h4>
+          <div id="pending-list"></div>
+        </div>
         <div style="margin-top:16px;">
           <h4>Export Completed Tasks</h4>
           <div class="grid">
