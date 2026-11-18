@@ -7,60 +7,66 @@
 <title>SS H505 ACMV Task Recorder (Online)</title>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f6f8; color: #1e293b; -webkit-text-size-adjust: 100%; touch-action: manipulation; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 12px; padding-bottom: env(safe-area-inset-bottom); }
-  header { background: #1e3a5f; color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; z-index: 100; padding-top: max(12px, env(safe-area-inset-top)); }
-  h1 { margin: 0; font-size: 1.15rem; }
-  h2 { font-size: 1.2rem; margin-top: 0; }
-  .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-  input, select, textarea, button { font: inherit; font-size: 16px; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 8px; min-height: 44px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; margin: 0; background: #f6f8fa; color: #1f2328; -webkit-text-size-adjust: 100%; touch-action: manipulation; line-height: 1.5; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px; padding-bottom: env(safe-area-inset-bottom); }
+  header { background: #24292f; color: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #3d444d; padding-top: max(12px, env(safe-area-inset-top)); }
+  h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+  h2 { font-size: 1.15rem; margin-top: 0; font-weight: 600; color: #1f2328; }
+  .card { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  input, select, textarea, button { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid #d0d7de; border-radius: 6px; min-height: 32px; background: #fff; }
   textarea { min-height: 80px; }
-  button { background: #1e3a5f; color: white; border: none; cursor: pointer; font-weight: 500; }
-  button:active { background: #2c5282; }
-  button.secondary { background: #64748b; }
-  button.danger { background: #b91c1c; }
-  button.small { padding: 8px 12px; font-size: 0.9rem; min-height: 36px; }
-  button.success { background: #15803d; }
+  button { background: #2da44e; color: #fff; border: 1px solid rgba(27,31,36,0.15); cursor: pointer; font-weight: 500; }
+  button:hover { background: #2c974b; }
+  button:active { background: #298e46; }
+  button.secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
+  button.secondary:hover { background: #f3f4f6; }
+  button.danger { background: #cf222e; border-color: rgba(27,31,36,0.15); }
+  button.danger:hover { background: #a40e26; }
+  button.small { padding: 3px 10px; font-size: 12px; min-height: 28px; }
+  button.success { background: #1a7f37; }
   button:disabled { opacity: 0.6; }
   .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
   @media (min-width: 640px) { .grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
-  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; min-width: 480px; }
-  th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  th { background: #f1f5f9; font-weight: 600; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-  .tabs button { background: #e2e8f0; color: #1e293b; flex: 1; min-width: 90px; min-height: 44px; }
-  .tabs button.active { background: #1e3a5f; color: white; }
-  .status { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 500; }
-  .not-started { background: #e2e8f0; }
-  .in-progress { background: #fef3c7; }
-  .completed { background: #d1fae5; }
-  .overdue { background: #fee2e2; color: #991b1b; }
-  .pending { background: #fde68a; }
-  .type-badge { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; margin-left: 4px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #d0d7de; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 480px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #d8dee4; vertical-align: top; }
+  th { background: #f6f8fa; font-weight: 600; color: #1f2328; }
+  tr:last-child td { border-bottom: none; }
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid #d0d7de; flex-wrap: wrap; }
+  .tabs button { background: transparent; color: #1f2328; border: none; border-bottom: 2px solid transparent; border-radius: 0; flex: none; min-width: auto; padding: 8px 16px; min-height: 40px; }
+  .tabs button.active { border-bottom-color: #fd8c73; font-weight: 600; }
+  .tabs button:hover { background: #f6f8fa; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 2em; font-size: 12px; font-weight: 500; border: 1px solid transparent; }
+  .not-started { background: #ddf4ff; color: #0969da; border-color: #54aeff66; }
+  .in-progress { background: #fff8c5; color: #9a6700; border-color: #d4a72c66; }
+  .completed { background: #dafbe1; color: #1a7f37; border-color: #4ac26b66; }
+  .overdue { background: #ffebe9; color: #cf222e; border-color: #ff818266; }
+  .pending { background: #fff1e5; color: #bc4c00; border-color: #fb8f4466; }
+  .type-badge { display: inline-block; background: #ddf4ff; color: #0969da; padding: 1px 7px; border-radius: 2em; font-size: 12px; margin-left: 4px; border: 1px solid #54aeff66; }
   .hidden { display: none; }
-  .login-box { max-width: 420px; margin: 24px auto; }
-  .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-  @media (min-width: 640px) { .summary-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); } }
-  .stat { background: #f8fafc; padding: 12px; border-radius: 8px; text-align: center; }
-  .stat strong { display: block; font-size: 1.5rem; color: #1e3a5f; }
-  small { color: #64748b; }
+  .login-box { max-width: 340px; margin: 48px auto; }
+  .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (min-width: 640px) { .summary-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
+  .stat { background: #f6f8fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de; }
+  .stat strong { display: block; font-size: 1.4rem; color: #1f2328; }
+  small { color: #656d76; }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  label { font-weight: 500; font-size: 0.95rem; display: block; margin-bottom: 4px; }
-  .badge { background: #ef4444; color: white; border-radius: 10px; padding: 1px 6px; font-size: 0.75rem; margin-left: 4px; }
-  .task-title { color: #1e3a5f; cursor: pointer; text-decoration: underline; }
-  .dashboard { background: #1e3a5f; color: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-  .dashboard h2 { color: white; margin-top: 0; }
-  .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-  .dash-stat { background: rgba(255,255,255,0.12); padding: 12px; border-radius: 8px; text-align: center; }
-  .dash-stat strong { display: block; font-size: 1.6rem; }
+  label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 4px; color: #1f2328; }
+  .badge { background: #cf222e; color: #fff; border-radius: 2em; padding: 1px 6px; font-size: 12px; margin-left: 4px; }
+  .task-title { color: #0969da; cursor: pointer; }
+  .task-title:hover { text-decoration: underline; }
+  .dashboard { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  .dashboard h2 { color: #1f2328; margin-top: 0; }
+  .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .dash-stat { background: #f6f8fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de; }
+  .dash-stat strong { display: block; font-size: 1.5rem; color: #1f2328; }
   .marquee-wrap { overflow: hidden; white-space: nowrap; margin-top: 4px; }
   .marquee-text { display: inline-block; padding-left: 100%; animation: marquee 20s linear infinite; }
   @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
-  .detail-row td { background: #f8fafc; padding: 14px 12px; }
-  .prog-activity { background: rgba(255,255,255,0.1); padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 0.9rem; }
-  .comment { background: #f8fafc; border-left: 3px solid #1e3a5f; padding: 10px; margin: 8px 0; font-size: 0.88rem; border-radius: 0 6px 6px 0; }
-  .score { font-weight: 700; color: #1e3a5f; }
+  .detail-row td { background: #f6f8fa; padding: 12px; }
+  .prog-activity { background: #f6f8fa; padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 14px; border: 1px solid #d0d7de; }
+  .comment { background: #f6f8fa; border-left: 3px solid #d0d7de; padding: 8px 12px; margin: 8px 0; font-size: 14px; border-radius: 0 6px 6px 0; }
+  .score { font-weight: 600; color: #1f2328; }
 </style>
 <script>
 function showAuth(mode) {
@@ -264,7 +270,11 @@ window.logout = async function() {
 function startListeners() {
   if (unsubTasks) unsubTasks();
   unsubTasks = onSnapshot(collection(db, 'tasks'), snap => { tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })); render(); });
-  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => { inbox = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateInboxBadge(); });
+  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => { 
+    inbox = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
+    updateInboxBadge(); 
+    renderInbox();
+  });
   unsubUsers = onSnapshot(collection(db, 'users'), snap => { users = snap.docs.map(d => ({ uid: d.id, ...d.data() })); populateUserFilter(); populateAssign(); });
   unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
     if (snap.exists()) {
@@ -282,6 +292,7 @@ function startListeners() {
 
 window.showView = function(v) {
   ['all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
+  if (v === 'inbox') renderInbox();
   render();
 };
 
@@ -407,6 +418,35 @@ function renderTypeDropdowns() {
   if (filterSel) filterSel.innerHTML = '<option value="">All</option>' + opts;
 }
 
+window.exportCompleted = function() {
+  if (!isAdmin()) return;
+  const from = document.getElementById('export-from').value;
+  const to = document.getElementById('export-to').value;
+  let list = tasks.filter(t => t.status === 'completed');
+  if (from) list = list.filter(t => (t.actualDate || t.targetDate || '') >= from);
+  if (to) list = list.filter(t => (t.actualDate || t.targetDate || '') <= to);
+  if (!list.length) { alert('No completed tasks in this period.'); return; }
+  const headers = ['Title','Type','Owner','Target Date','Completed Date','Score','Description','Comments'];
+  const rows = list.map(t => {
+    const owner = users.find(u => u.uid === t.user);
+    return [
+      '"' + (t.title || '').replace(/"/g,'""') + '"',
+      t.type || '',
+      owner ? owner.name : (t.user || 'TBC'),
+      t.targetDate || '',
+      t.actualDate || '',
+      t.score != null ? t.score : '',
+      '"' + (t.description || '').replace(/"/g,'""') + '"',
+      '"' + ((t.comments || []).join(' | ')).replace(/"/g,'""') + '"'
+    ].join(',');
+  });
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+  a.download = 'completed_tasks_' + (from || 'all') + '_to_' + (to || 'all') + '.csv';
+  a.click();
+};
+
 window.checkOverdue = async function() {
   if (!isAdmin()) return;
   const overdue = tasks.filter(isOverdue);
@@ -461,14 +501,6 @@ window.renderIndividual = function() {
   const scored = completed.filter(t => t.score != null);
   const avg = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
   document.getElementById('indiv-result').innerHTML = `<h4>${escape(u ? u.name : uid)}</h4><p>Tasks: ${list.length} · Completed: ${completed.length} · Avg: ${avg}</p>`;
-};
-  if (!isAdmin()) return;
-  const c = prompt('Comment:');
-  if (!c) return;
-  const t = tasks.find(x => x.id === id);
-  const comments = t.comments || [];
-  comments.push(currentUser.name + ': ' + c);
-  await updateDoc(doc(db, 'tasks', id), { comments });
 };
 
 window.saveAnnouncement = async function() {
@@ -710,7 +742,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v8.8</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v9.4</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -731,18 +763,17 @@ function renderPerf() {
       <button type="submit" style="width:100%;">Create Account</button>
     </form>
     <p id="auth-error" style="color:#b91c1c; font-size:0.9rem; margin-top:8px;"></p>
-    <p style="font-size:0.8rem; color:#64748b;">Register <strong>admin</strong> first to create the admin account.</p>
   </div>
 
   <div id="app-section" class="hidden">
     <div id="dashboard" class="dashboard">
       <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
       <div id="dash-content" class="dash-stats"></div>
-      <div id="announcement-box" style="margin-top:12px; background:rgba(255,255,255,0.15); padding:10px 12px; border-radius:8px;">
+      <div id="announcement-box" style="margin-top:12px; background:#f6f8fa; padding:10px 12px; border-radius:6px; border:1px solid #d0d7de;">
         <strong>Announcement</strong>
         <div class="marquee-wrap"><div id="announcement-text" class="marquee-text"></div></div>
         <div id="admin-announcement" class="hidden" style="margin-top:8px;">
-          <textarea id="announcement-edit" rows="3" style="width:100%; background:white; color:#1e293b;"></textarea>
+          <textarea id="announcement-edit" rows="3" style="width:100%;"></textarea>
           <button type="button" class="small" onclick="saveAnnouncement()" style="margin-top:6px;">Save Announcement</button>
         </div>
       </div>
@@ -828,6 +859,14 @@ function renderPerf() {
       <div id="admin-tools" class="hidden" style="margin-top:16px;">
         <h3>Admin Tools</h3>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+        <div style="margin-top:16px;">
+          <h4>Export Completed Tasks</h4>
+          <div class="grid">
+            <div><label>From</label><input type="date" id="export-from" style="width:100%;"></div>
+            <div><label>To</label><input type="date" id="export-to" style="width:100%;"></div>
+          </div>
+          <button type="button" class="small" onclick="exportCompleted()" style="margin-top:8px;">Export to Excel (CSV)</button>
+        </div>
       </div>
     </div>
     <div id="view-perf" class="card hidden">
