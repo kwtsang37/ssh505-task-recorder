@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>SS H505 ACMV Task Recorder (Online)</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; margin: 0; background: #f6f8fa; color: #1f2328; -webkit-text-size-adjust: 100%; touch-action: manipulation; line-height: 1.5; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 16px; padding-bottom: env(safe-area-inset-bottom); }
+  header { background: #24292f; color: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #3d444d; padding-top: max(12px, env(safe-area-inset-top)); }
+  h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+  h2 { font-size: 1.15rem; margin-top: 0; font-weight: 600; color: #1f2328; }
+  .card { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  input, select, textarea, button { font: inherit; font-size: 14px; padding: 5px 12px; border: 1px solid #d0d7de; border-radius: 6px; min-height: 32px; background: #fff; }
+  textarea { min-height: 80px; }
+  button { background: #2da44e; color: #fff; border: 1px solid rgba(27,31,36,0.15); cursor: pointer; font-weight: 500; }
+  button:hover { background: #2c974b; }
+  button:active { background: #298e46; }
+  button.secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
+  button.secondary:hover { background: #f3f4f6; }
+  button.danger { background: #cf222e; border-color: rgba(27,31,36,0.15); }
+  button.danger:hover { background: #a40e26; }
+  button.small { padding: 3px 10px; font-size: 12px; min-height: 28px; }
+  button.success { background: #1a7f37; }
+  button:disabled { opacity: 0.6; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  @media (min-width: 640px) { .grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid #d0d7de; border-radius: 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 480px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #d8dee4; vertical-align: top; }
+  th { background: #f6f8fa; font-weight: 600; color: #1f2328; }
+  tr:last-child td { border-bottom: none; }
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid #d0d7de; flex-wrap: wrap; }
+  .tabs button { background: transparent; color: #1f2328; border: none; border-bottom: 2px solid transparent; border-radius: 0; flex: none; min-width: auto; padding: 8px 16px; min-height: 40px; }
+  .tabs button.active { border-bottom-color: #fd8c73; font-weight: 600; }
+  .tabs button:hover { background: #f6f8fa; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 2em; font-size: 12px; font-weight: 500; border: 1px solid transparent; }
+  .not-started { background: #ddf4ff; color: #0969da; border-color: #54aeff66; }
+  .in-progress { background: #fff8c5; color: #9a6700; border-color: #d4a72c66; }
+  .completed { background: #dafbe1; color: #1a7f37; border-color: #4ac26b66; }
+  .overdue { background: #ffebe9; color: #cf222e; border-color: #ff818266; }
+  .pending { background: #fff1e5; color: #bc4c00; border-color: #fb8f4466; }
+  .type-badge { display: inline-block; background: #ddf4ff; color: #0969da; padding: 1px 7px; border-radius: 2em; font-size: 12px; margin-left: 4px; border: 1px solid #54aeff66; }
+  .hidden { display: none; }
+  .login-box { max-width: 340px; margin: 48px auto; }
+  .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (min-width: 640px) { .summary-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); } }
+  .stat { background: #f6f8fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de; }
+  .stat strong { display: block; font-size: 1.4rem; color: #1f2328; }
+  small { color: #656d76; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  label { font-weight: 600; font-size: 14px; display: block; margin-bottom: 4px; color: #1f2328; }
+  .badge { background: #cf222e; color: #fff; border-radius: 2em; padding: 1px 6px; font-size: 12px; margin-left: 4px; }
+  .task-title { color: #0969da; cursor: pointer; }
+  .task-title:hover { text-decoration: underline; }
+  .dashboard { background: #fff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; margin-bottom: 16px; }
+  .dashboard h2 { color: #1f2328; margin-top: 0; }
+  .dash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .dash-stat { background: #f6f8fa; padding: 12px; border-radius: 6px; text-align: center; border: 1px solid #d0d7de; }
+  .dash-stat strong { display: block; font-size: 1.5rem; color: #1f2328; }
+  .marquee-wrap { overflow: hidden; white-space: nowrap; margin-top: 4px; }
+  .marquee-text { display: inline-block; padding-left: 100%; animation: marquee 20s linear infinite; }
+  @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+  .detail-row td { background: #f6f8fa; padding: 12px; }
+  .prog-activity { background: #f6f8fa; padding: 8px 10px; border-radius: 6px; margin-top: 6px; font-size: 14px; border: 1px solid #d0d7de; }
+  .comment { background: #f6f8fa; border-left: 3px solid #d0d7de; padding: 8px 12px; margin: 8px 0; font-size: 14px; border-radius: 0 6px 6px 0; }
+  .score { font-weight: 600; color: #1f2328; }
+</style>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+emailjs.init("sRoFQ9Ji6mjNKSCOc");
+
+function showAuth(mode) {
+  document.getElementById('login-form').classList.toggle('hidden', mode !== 'login');
+  document.getElementById('register-form').classList.toggle('hidden', mode !== 'register');
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+  document.getElementById('auth-error').textContent = '';
+}
+// Placeholders so buttons never say "not defined"
+window.acceptTask = window.acceptTask || function() { alert('Please wait for the page to finish loading.'); };
+window.rejectTask = window.rejectTask || function() { alert('Please wait for the page to finish loading.'); };
+window.deleteInboxMessage = window.deleteInboxMessage || function() { alert('Please wait for the page to finish loading.'); };
+</script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, getDoc, updateDoc, onSnapshot, query, where, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCBv6p_JIac4d_JJ8aGrhCAD7FbdRcyxrw",
+  authDomain: "ssh505-task-recorder.firebaseapp.com",
+  projectId: "ssh505-task-recorder",
+  storageBucket: "ssh505-task-recorder.firebasestorage.app",
+  messagingSenderId: "53469864424",
+  appId: "1:53469864424:web:2c5beef6410839554b045d",
+  measurementId: "G-W9QC2NMHVK"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const ADMIN_EMAIL = "admin@newland.com.hk";
+let currentUser = null;
+let tasks = [];
+let inbox = [];
+let users = [];
+let announcement = 'Welcome to the SS H505 ACMV Task Recorder.';
+let programme = [];
+let progVersion = 'Rev. 7 r3 (21 Jul 2026)';
+let expandedTaskId = null;
+let unsubTasks, unsubInbox, unsubUsers, unsubSettings;
+
+async function sendEmail(toEmail, subject, message) {
+  if (!toEmail || !toEmail.includes('@')) return;
+  try {
+    await emailjs.send("service_0kbno3j", "template_81250ji", {
+      to_email: toEmail,
+      subject: subject,
+      message: message
+    });
+  } catch (err) {
+    console.warn('Email send failed:', err);
+  }
+}
+
+function isAdmin() { 
+  if (!currentUser) return false;
+  const email = (currentUser.email || '').toLowerCase();
+  const name = (currentUser.name || '').toLowerCase();
+  return currentUser.role === 'admin' || email.includes('admin') || name.includes('admin');
+}
+function today() { return new Date().toISOString().slice(0,10); }
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr); const t = new Date(); t.setHours(0,0,0,0);
+  return Math.round((d - t) / 86400000);
+}
+function isOverdue(t) { return t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) < 0; }
+function escape(s) { return String(s||'').replace(/[&<>"']/g, m => ({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[m])); }
+function scoreLabel(s) {
+  if (s == null) return '';
+  if (s <= 2) return 'Improvement Required';
+  if (s <= 4) return 'Satisfied';
+  return 'Well Done';
+}
+
+function updateAdminUI() {
+  const admin = isAdmin();
+  ['admin-perf','admin-announcement','admin-prog-upload','assign-box','admin-tools'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', !admin);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Logging in...';
+    btn.disabled = true;
+    const errEl = document.getElementById('auth-error');
+    errEl.textContent = '';
+    let email = document.getElementById('login-user').value.trim();
+    if (email && !email.includes('@')) email += '@newland.com.hk';
+    const pass = document.getElementById('login-pass').value;
+    try {
+      console.log('Trying login with:', email);
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (err) {
+      console.error('Login error:', err.code, err.message);
+      let msg = err.message;
+      if (err.code === 'auth/user-not-found') msg = 'Account not found. Please Register first.';
+      if (err.code === 'auth/wrong-password') msg = 'Wrong password.';
+      if (err.code === 'auth/invalid-credential') msg = 'Invalid credentials. Register first if this account does not exist.';
+      if (err.code === 'auth/invalid-email') msg = 'Invalid email format.';
+      if (err.code === 'auth/unauthorized-domain') msg = 'Domain not authorized. Add kwtsang37.github.io in Firebase Console.';
+      errEl.textContent = msg + ' [code: ' + (err.code || 'unknown') + ']';
+      btn.textContent = 'Login';
+      btn.disabled = false;
+    }
+  };
+
+  document.getElementById('register-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.textContent = 'Creating...';
+    btn.disabled = true;
+    document.getElementById('auth-error').textContent = '';
+    let email = document.getElementById('reg-user').value.trim();
+    if (email && !email.includes('@')) email += '@newland.com.hk';
+    const name = document.getElementById('reg-name').value.trim();
+    const pass = document.getElementById('reg-pass').value;
+    const pass2 = document.getElementById('reg-pass2').value;
+    if (pass !== pass2) {
+      document.getElementById('auth-error').textContent = 'Passwords do not match.';
+      return;
+    }
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      const role = email.toLowerCase() === ADMIN_EMAIL ? 'admin' : 'pending';
+      await setDoc(doc(db, 'users', cred.user.uid), { email, name, role, created: serverTimestamp() });
+      if (role === 'pending') {
+        const adminEmail = await getAdminEmail();
+        await sendEmail(adminEmail, 'New account pending approval', `New user registered: ${name} (${email}). Please approve in the Task Recorder Settings.`);
+        alert('Account created. Waiting for admin approval. You will be notified when approved.');
+        await signOut(auth);
+      }
+    } catch (err) {
+      document.getElementById('auth-error').textContent = err.message;
+      btn.textContent = 'Create Account';
+      btn.disabled = false;
+    }
+  };
+
+  document.getElementById('task-form').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    const editId = document.getElementById('edit-id').value;
+    const data = {
+      title: document.getElementById('task-title').value.trim(),
+      type: document.getElementById('task-type').value,
+      description: document.getElementById('task-desc').value.trim(),
+      targetDate: document.getElementById('task-target').value,
+      status: document.getElementById('task-status').value
+    };
+    if (editId) {
+      const oldTask = tasks.find(x => x.id === editId);
+      const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : null;
+      if (assign && isAdmin()) {
+        data.user = assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign);
+        data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
+      }
+      // Clear acceptance if status is changed to in-progress or completed
+      if (data.status === 'in-progress' || data.status === 'completed') {
+        data.acceptance = null;
+      }
+      await updateDoc(doc(db, 'tasks', editId), data);
+      // Notify admin if status changed from completed
+      if (oldTask && oldTask.status === 'completed' && data.status !== 'completed') {
+        const adminUser = users.find(u => u.role === 'admin');
+        if (adminUser && adminUser.uid !== currentUser.uid) {
+          await addDoc(collection(db, 'inbox'), {
+            to: adminUser.uid,
+            subject: 'Task reopened',
+            message: `${currentUser.name || 'User'} changed "${data.title}" from Completed back to ${data.status}.`,
+            taskId: editId,
+            date: serverTimestamp(),
+            read: false
+          });
+        }
+      }
+      // Notify admin if target date changed
+      if (oldTask && data.targetDate && data.targetDate !== oldTask.targetDate) {
+        const adminUser = users.find(u => u.role === 'admin');
+        if (adminUser && adminUser.uid !== currentUser.uid) {
+          await addDoc(collection(db, 'inbox'), {
+            to: adminUser.uid,
+            subject: 'Completion date changed',
+            message: `${currentUser.name || 'User'} changed the target date of "${data.title}" from ${oldTask.targetDate || '-'} to ${data.targetDate}.`,
+            taskId: editId,
+            date: serverTimestamp(),
+            read: false
+          });
+          const adminEmail = await getAdminEmail();
+          await sendEmail(adminEmail, 'Completion date changed', `${currentUser.name || 'User'} changed the target date of "${data.title}" from ${oldTask.targetDate || '-'} to ${data.targetDate}.`);
+        }
+      }
+      // Notify new assignee if changed
+      if (data.user && oldTask && data.user !== oldTask.user && data.acceptance === 'pending' && data.user !== currentUser.uid) {
+        const newUser = users.find(u => u.uid === data.user);
+        await addDoc(collection(db, 'inbox'), {
+          to: data.user,
+          subject: 'Task assigned to you',
+          message: `You have been assigned the task "${data.title}".`,
+          taskId: editId,
+          date: serverTimestamp(),
+          read: false
+        });
+        if (newUser && newUser.email) {
+          await sendEmail(newUser.email, 'Task assigned to you', `You have been assigned the task "${data.title}" in the Task Recorder.`);
+        }
+      }
+      document.getElementById('edit-id').value = '';
+    } else {
+      const assign = document.getElementById('task-assign') ? document.getElementById('task-assign').value : 'self';
+      data.user = assign === 'self' ? currentUser.uid : (assign === 'TBC' ? null : assign);
+      data.acceptance = assign === 'TBC' ? 'open' : (assign === 'self' ? null : 'pending');
+      data.created = serverTimestamp();
+      data.comments = [];
+      data.score = null;
+      const ref = await addDoc(collection(db, 'tasks'), data);
+      if (data.acceptance === 'pending' && data.user && data.user !== currentUser.uid) {
+        const newUser = users.find(u => u.uid === data.user);
+        await addDoc(collection(db, 'inbox'), { to: data.user, subject: 'Task assigned to you', message: data.title, taskId: ref.id, date: serverTimestamp(), read: false });
+        if (newUser && newUser.email) {
+          await sendEmail(newUser.email, 'Task assigned to you', `You have been assigned the task "${data.title}" in the Task Recorder.`);
+        }
+      }
+      if (data.acceptance === 'open') {
+        // Notify all non-admin users that a new open task is available
+        for (const u of users) {
+          if (u.role !== 'admin' && u.email) {
+            await sendEmail(u.email, 'New open task available', `A new task "${data.title}" is open for anyone to accept in the Task Recorder.`);
+          }
+        }
+      }
+    }
+    document.getElementById('task-form').reset();
+    showView('progress');
+  };
+});
+
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    document.getElementById('auth-section').classList.add('hidden');
+    document.getElementById('app-section').classList.remove('hidden');
+    // Always show something in header first
+    document.getElementById('user-info').innerHTML = `${user.email.split('@')[0]} <button onclick="logout()" class="secondary small">Logout</button>`;
+    try {
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      currentUser = userDoc.exists() ? { uid: user.uid, ...userDoc.data() } : { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+      // Fallback if name/email missing from Firestore
+      if (!currentUser.email) currentUser.email = user.email;
+      if (!currentUser.name) currentUser.name = user.email ? user.email.split('@')[0] : 'Admin';
+      if (currentUser.role === 'pending') {
+        alert('Your account is pending admin approval.');
+        await signOut(auth);
+        return;
+      }
+      if ((currentUser.email || '').toLowerCase().includes('admin') || (currentUser.name || '').toLowerCase().includes('admin')) {
+        currentUser.role = 'admin';
+        await setDoc(doc(db, 'users', user.uid), { role: 'admin', email: currentUser.email, name: currentUser.name }, { merge: true });
+      }
+      document.getElementById('user-info').innerHTML = `${currentUser.name || 'Admin'} <button onclick="logout()" class="secondary small">Logout</button>`;
+      updateAdminUI();
+    } catch (err) {
+      console.error('Profile load error:', err);
+      currentUser = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+      document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
+    }
+    startListeners();
+    showView('progress');
+    // Remind admin only if there are NEW tasks due within 3 days
+    if (isAdmin()) {
+      setTimeout(async () => {
+        const newDueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3 && !t.adminReminded);
+        if (newDueSoon.length) {
+          const adminEmail = await getAdminEmail();
+          const titles = newDueSoon.map(t => t.title).join(', ');
+          await sendEmail(adminEmail, 'New tasks due within 3 days', `There are ${newDueSoon.length} new task(s) due within 3 days: ${titles}. Please log in and use the reminder buttons in Settings to notify the owners.`);
+          // Mark as admin-reminded so we don't email again for these
+          for (const t of newDueSoon) {
+            await updateDoc(doc(db, 'tasks', t.id), { adminReminded: true });
+          }
+        }
+      }, 3000);
+    }
+  } else {
+    currentUser = null;
+    if (unsubTasks) unsubTasks();
+    document.getElementById('auth-section').classList.remove('hidden');
+    document.getElementById('app-section').classList.add('hidden');
+  }
+});
+
+window.forgotPassword = async function() {
+  const emailInput = document.getElementById('login-user').value.trim();
+  if (!emailInput) { alert('Enter your email or prefix first.'); return; }
+  const email = emailInput.includes('@') ? emailInput : emailInput + '@newland.com.hk';
+  try {
+    const { sendPasswordResetEmail } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    await sendPasswordResetEmail(auth, email);
+    alert('Password reset email sent to ' + email + '. Check your inbox.');
+  } catch (err) {
+    alert('Failed: ' + err.message);
+  }
+};
+
+window.logout = async function() {
+  try { await signOut(auth); } catch (e) { console.warn(e); }
+  currentUser = null;
+  document.getElementById('auth-section').classList.remove('hidden');
+  document.getElementById('app-section').classList.add('hidden');
+  document.getElementById('user-info').innerHTML = '';
+  document.getElementById('login-user').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('auth-error').textContent = '';
+  const btn = document.querySelector('#login-form button[type="submit"]');
+  if (btn) { btn.textContent = 'Login'; btn.disabled = false; }
+  showAuth('login');
+};
+
+function startListeners() {
+  if (unsubTasks) unsubTasks();
+  unsubUsers = onSnapshot(collection(db, 'users'), snap => { 
+    users = snap.docs.map(d => ({ uid: d.id, ...d.data() })); 
+    populateUserFilter(); 
+    populateAssign(); 
+    render();
+  });
+  unsubTasks = onSnapshot(collection(db, 'tasks'), snap => { 
+    tasks = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
+    render(); 
+  });
+  unsubInbox = onSnapshot(query(collection(db, 'inbox'), where('to', '==', currentUser.uid)), snap => { 
+    inbox = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
+    updateInboxBadge(); 
+    renderInbox();
+  });
+  unsubSettings = onSnapshot(doc(db, 'settings', 'main'), snap => {
+    if (snap.exists()) {
+      announcement = snap.data().announcement || announcement;
+      programme = snap.data().programme || programme;
+      progVersion = snap.data().progVersion || progVersion;
+      if (snap.data().taskTypes) {
+        window._taskTypes = snap.data().taskTypes;
+        renderTypeDropdowns();
+      }
+    }
+    renderDashboard();
+  });
+}
+
+window.showView = function(v) {
+  ['progress','all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+v+"'")));
+  if (v === 'inbox') {
+    renderInbox();
+    // Mark all current inbox messages as read
+    inbox.forEach(async m => {
+      if (!m.read) {
+        await updateDoc(doc(db, 'inbox', m.id), { read: true });
+      }
+    });
+  }
+  if (v === 'settings') { 
+    renderPending(); 
+    renderUserList(); 
+    renderDueSoon();
+    getAdminEmail().then(e => { const el = document.getElementById('admin-notify-email'); if (el) el.value = e; });
+  }
+  render();
+};
+
+window.markCompleted = async function(id) {
+  if (!confirm('Mark as Completed?')) return;
+  const t = tasks.find(x => x.id === id);
+  await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today(), acceptance: null });
+  // Notify admin
+  const adminUser = users.find(u => u.role === 'admin' || (u.email || '').toLowerCase().includes('admin'));
+  if (adminUser && adminUser.uid !== currentUser.uid) {
+    await addDoc(collection(db, 'inbox'), {
+      to: adminUser.uid,
+      subject: 'Task completed',
+      message: `${currentUser.name || 'A user'} marked "${t ? t.title : 'a task'}" as completed. Please score it.`,
+      taskId: id,
+      date: serverTimestamp(),
+      read: false
+    });
+    const adminEmail = await getAdminEmail();
+    await sendEmail(adminEmail, 'Task completed', `${currentUser.name || 'A user'} marked "${t ? t.title : 'a task'}" as completed. Please score it.`);
+  }
+};
+
+window.toggleTaskDetail = function(id) {
+  expandedTaskId = expandedTaskId === id ? null : id;
+  renderProgress();
+  renderAll();
+  renderMy();
+};
+
+window.editTask = function(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('task-title').value = t.title || '';
+  document.getElementById('task-type').value = t.type || '';
+  document.getElementById('task-target').value = t.targetDate || '';
+  document.getElementById('task-status').value = t.status || 'not-started';
+  document.getElementById('task-desc').value = t.description || '';
+  document.getElementById('edit-id').value = id;
+  // Set assign dropdown if admin
+  const assignSel = document.getElementById('task-assign');
+  if (assignSel && isAdmin()) {
+    assignSel.value = t.user || 'TBC';
+  }
+  showView('add');
+};
+
+window.deleteTask = async function(id) {
+  if (!confirm('Delete this task?')) return;
+  try {
+    await deleteDoc(doc(db, 'tasks', id));
+    expandedTaskId = null;
+  } catch (err) { alert('Delete failed: ' + err.message); }
+};
+
+window.releaseTask = async function(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.user !== currentUser.uid) { alert('Only the owner can release this task.'); return; }
+  if (!confirm('Release this task so others can accept it?')) return;
+  try {
+    await updateDoc(doc(db, 'tasks', id), { user: null, acceptance: 'open', status: 'not-started' });
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid,
+        subject: 'Task released',
+        message: `${currentUser.name || 'User'} released "${t.title}" for others to accept.`,
+        taskId: id,
+        date: serverTimestamp(),
+        read: false
+      });
+      const adminEmail = await getAdminEmail();
+      await sendEmail(adminEmail, 'Task released', `${currentUser.name || 'User'} released "${t.title}" for others to accept.`);
+    }
+    alert('Task released.');
+  } catch (err) { alert('Failed: ' + err.message); }
+};
+
+window.requestExtension = async function(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.user !== currentUser.uid) { alert('Only the task owner can request an extension.'); return; }
+  const newDate = prompt('New target date (YYYY-MM-DD):', t.targetDate || '');
+  if (!newDate) return;
+  const reason = prompt('Reason for extension:');
+  if (!reason) return;
+  try {
+    await updateDoc(doc(db, 'tasks', id), { targetDate: newDate, extensionReason: reason, extensionRequested: serverTimestamp() });
+    // Notify admin
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid,
+        subject: 'Extension requested',
+        message: `${currentUser.name || 'User'} requested extension for "${t.title}" to ${newDate}. Reason: ${reason}`,
+        taskId: id,
+        date: serverTimestamp(),
+        read: false
+      });
+      const adminEmail = await getAdminEmail();
+      await sendEmail(adminEmail, 'Extension requested', `${currentUser.name || 'User'} requested extension for "${t.title}" to ${newDate}. Reason: ${reason}`);
+    }
+    alert('Extension recorded and admin notified.');
+  } catch (err) { alert('Failed: ' + err.message); }
+};
+
+window.acceptTask = async function(id) {
+  if (!currentUser) { alert('Not logged in'); return; }
+  try {
+    const t = tasks.find(x => x.id === id);
+    await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
+    // Notify admin
+    const adminUser = users.find(u => u.role === 'admin');
+    if (adminUser && adminUser.uid !== currentUser.uid) {
+      await addDoc(collection(db, 'inbox'), {
+        to: adminUser.uid,
+        subject: 'Task accepted',
+        message: `${currentUser.name || 'A user'} accepted the open task "${t ? t.title : ''}".`,
+        taskId: id,
+        date: serverTimestamp(),
+        read: false
+      });
+    }
+    alert('Task accepted.');
+  } catch (err) { alert('Accept failed: ' + err.message); }
+};
+
+window.rejectTask = async function(id) {
+  if (!currentUser) { alert('Not logged in'); return; }
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  try {
+    await updateDoc(doc(db, 'tasks', id), { acceptance: 'rejected', user: null, status: 'not-started' });
+    alert('Task rejected.');
+  } catch (err) { alert('Reject failed: ' + err.message); }
+};
+
+window.deleteInboxMessage = async function(id) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    await deleteDoc(doc(db, 'inbox', id));
+    inbox = inbox.filter(m => m.id !== id);
+    renderInbox();
+    updateInboxBadge();
+  } catch (err) { alert('Delete failed: ' + err.message); }
+};
+
+window.addComment = async function(id) {
+  const comment = prompt('Add comment:');
+  if (!comment) return;
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  const comments = t.comments || [];
+  comments.push((currentUser.name || 'User') + ': ' + comment);
+  await updateDoc(doc(db, 'tasks', id), { comments });
+};
+
+window.setScore = async function(id) {
+  if (!isAdmin()) return;
+  const score = prompt('Score (1-5):');
+  if (!score || isNaN(score) || score < 1 || score > 5) return;
+  await updateDoc(doc(db, 'tasks', id), { score: Number(score) });
+};
+
+window.addTaskType = async function() {
+  const name = prompt('New task type name:');
+  if (!name) return;
+  const types = [...new Set([...(window._taskTypes || ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others']), name])];
+  window._taskTypes = types;
+  await setDoc(doc(db, 'settings', 'main'), { taskTypes: types }, { merge: true });
+  renderTypeDropdowns();
+  alert('Type added.');
+};
+
+function renderTypeDropdowns() {
+  const defaults = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  const types = [...new Set([...defaults, ...(window._taskTypes || [])])];
+  const opts = types.map(t => `<option>${escape(t)}</option>`).join('');
+  const addSel = document.getElementById('task-type');
+  const filterSel = document.getElementById('filter-type');
+  if (addSel) addSel.innerHTML = opts;
+  if (filterSel) filterSel.innerHTML = '<option value="">All</option>' + opts;
+}
+
+window.exportCompleted = function() {
+  if (!isAdmin()) return;
+  const from = document.getElementById('export-from').value;
+  const to = document.getElementById('export-to').value;
+  let list = tasks.filter(t => t.status === 'completed');
+  if (from) list = list.filter(t => (t.actualDate || t.targetDate || '') >= from);
+  if (to) list = list.filter(t => (t.actualDate || t.targetDate || '') <= to);
+  if (!list.length) { alert('No completed tasks in this period.'); return; }
+  const headers = ['Title','Type','Owner','Target Date','Completed Date','Score','Description','Comments'];
+  const rows = list.map(t => {
+    const owner = users.find(u => u.uid === t.user);
+    return [
+      '"' + (t.title || '').replace(/"/g,'""') + '"',
+      t.type || '',
+      owner ? owner.name : (t.user || 'TBC'),
+      t.targetDate || '',
+      t.actualDate || '',
+      t.score != null ? t.score : '',
+      '"' + (t.description || '').replace(/"/g,'""') + '"',
+      '"' + ((t.comments || []).join(' | ')).replace(/"/g,'""') + '"'
+    ].join(',');
+  });
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+  a.download = 'completed_tasks_' + (from || 'all') + '_to_' + (to || 'all') + '.csv';
+  a.click();
+};
+
+window.saveAdminEmail = async function() {
+  if (!isAdmin()) return;
+  const email = document.getElementById('admin-notify-email').value.trim();
+  if (!email) return;
+  await setDoc(doc(db, 'settings', 'main'), { adminNotifyEmail: email }, { merge: true });
+  alert('Admin email saved.');
+};
+
+async function getAdminEmail() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'main'));
+    return snap.exists() && snap.data().adminNotifyEmail ? snap.data().adminNotifyEmail : 'kwtsang37@gmail.com';
+  } catch (e) { return 'kwtsang37@gmail.com'; }
+}
+
+window.deleteUser = async function(uid) {
+  if (!isAdmin()) return;
+  if (!confirm('Delete this account? This cannot be undone.')) return;
+  try {
+    await deleteDoc(doc(db, 'users', uid));
+    alert('Account deleted.');
+    renderUserList();
+  } catch (err) { alert('Failed: ' + err.message); }
+};
+
+window.approveUser = async function(uid) {
+  if (!isAdmin()) return;
+  await updateDoc(doc(db, 'users', uid), { role: 'user' });
+  alert('User approved.');
+  renderPending();
+};
+
+function renderPending() {
+  const el = document.getElementById('pending-list');
+  if (!el || !isAdmin()) return;
+  const pending = users.filter(u => u.role === 'pending');
+  if (!pending.length) { el.innerHTML = '<p>No pending accounts.</p>'; return; }
+  el.innerHTML = pending.map(u => `<div style="padding:6px 0; border-bottom:1px solid #eee;">
+    ${escape(u.name)} (${escape(u.email)})
+    <button class="small success" onclick="approveUser('${u.uid}')" style="margin-left:8px;">Approve</button>
+  </div>`).join('');
+}
+
+function renderUserList() {
+  const el = document.getElementById('user-list');
+  if (!el || !isAdmin()) return;
+  const list = users.filter(u => u.role !== 'admin');
+  if (!list.length) { el.innerHTML = '<p>No users.</p>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>User</th><th>Tasks</th><th>Completed</th><th>In Progress</th><th>Overdue</th><th></th></tr></thead><tbody>' +
+    list.map(u => {
+      const userTasks = tasks.filter(t => t.user === u.uid);
+      const completed = userTasks.filter(t => t.status === 'completed').length;
+      const inProg = userTasks.filter(t => t.status === 'in-progress').length;
+      const overdue = userTasks.filter(isOverdue).length;
+      return `<tr><td>${escape(u.name)}</td><td>${userTasks.length}</td><td>${completed}</td><td>${inProg}</td><td>${overdue}</td><td><button class="small danger" onclick="deleteUser('${u.uid}')">Delete</button></td></tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+window.sendDueSoonOne = async function(id) {
+  if (!isAdmin()) return;
+  const t = tasks.find(x => x.id === id);
+  if (!t || t.reminded) return;
+  const owner = users.find(u => u.uid === t.user);
+  const days = daysUntil(t.targetDate);
+  const msg = `Task: "${t.title}"\nType: ${t.type || '-'}\nTarget: ${t.targetDate}\nDays left: ${days}\n\nPlease complete this task in the Task Recorder.`;
+  if (t.user) {
+    await addDoc(collection(db, 'inbox'), {
+      to: t.user, subject: 'Task due soon: ' + t.title, message: msg, taskId: id, date: serverTimestamp(), read: false
+    });
+    if (owner && owner.email) {
+      await sendEmail(owner.email, 'Task due soon: ' + t.title, msg);
+    }
+  }
+  await updateDoc(doc(db, 'tasks', id), { reminded: true, remindedDate: serverTimestamp() });
+  alert('Reminder sent for "' + t.title + '"');
+  renderDueSoon();
+};
+
+function renderDueSoon() {
+  const el = document.getElementById('due-soon-list');
+  if (!el || !isAdmin()) return;
+  const dueSoon = tasks.filter(t => t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) >= 0 && daysUntil(t.targetDate) <= 3);
+  if (!dueSoon.length) { el.innerHTML = '<p>No tasks due within 3 days.</p>'; return; }
+  el.innerHTML = dueSoon.map(t => {
+    const owner = users.find(u => u.uid === t.user);
+    const days = daysUntil(t.targetDate);
+    return `<div style="padding:8px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+      <div>
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>${escape(owner ? owner.name : 'TBC')} · Due in ${days} day(s) · ${t.targetDate}</small>
+        ${t.reminded ? '<br><small style="color:#1a7f37;">✓ Reminded</small>' : ''}
+      </div>
+      ${!t.reminded ? `<button class="small" onclick="sendDueSoonOne('${t.id}')">Send Reminder</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+window.checkOverdue = async function() {
+  if (!isAdmin()) return;
+  const overdue = tasks.filter(isOverdue);
+  if (!overdue.length) { alert('No overdue tasks.'); return; }
+  let sent = 0;
+  for (const t of overdue) {
+    if (t.user) {
+      const owner = users.find(u => u.uid === t.user);
+      await addDoc(collection(db, 'inbox'), {
+        to: t.user,
+        subject: 'Task overdue',
+        message: `"${t.title}" is overdue. Please update it.`,
+        taskId: t.id,
+        date: serverTimestamp(),
+        read: false
+      });
+      if (owner && owner.email) {
+        await sendEmail(owner.email, 'Task overdue', `"${t.title}" is overdue. Please update it in the Task Recorder.`);
+      }
+      sent++;
+    }
+  }
+  alert(sent + ' overdue notification(s) sent to responsible user(s).');
+};
+
+window.changePassword = async function() {
+  const newPass = prompt('Enter new password (min 6 characters):');
+  if (!newPass || newPass.length < 6) { alert('Password too short'); return; }
+  try {
+    const { updatePassword } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    await updatePassword(auth.currentUser, newPass);
+    alert('Password updated.');
+  } catch (err) {
+    alert('Failed: ' + err.message + '\nYou may need to re-login first.');
+  }
+};
+
+window.deleteInboxMessage = async function(id) {
+  if (!confirm('Delete this message?')) return;
+  try {
+    await deleteDoc(doc(db, 'inbox', id));
+    inbox = inbox.filter(m => m.id !== id);
+    renderInbox();
+    updateInboxBadge();
+  } catch (err) { alert('Delete failed: ' + err.message); }
+};
+
+window.renderIndividual = function() {
+  const uid = document.getElementById('indiv-user') ? document.getElementById('indiv-user').value : '';
+  if (!uid) return;
+  const u = users.find(x => x.uid === uid);
+  const list = tasks.filter(t => t.user === uid);
+  const completed = list.filter(t => t.status === 'completed');
+  const scored = completed.filter(t => t.score != null);
+  const avg = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
+  document.getElementById('indiv-result').innerHTML = `<h4>${escape(u ? u.name : uid)}</h4><p>Tasks: ${list.length} · Completed: ${completed.length} · Avg: ${avg}</p>`;
+};
+
+window.saveAnnouncement = async function() {
+  if (!isAdmin()) return;
+  const text = document.getElementById('announcement-edit').value.trim();
+  await setDoc(doc(db, 'settings', 'main'), { announcement: text }, { merge: true });
+  alert('Saved.');
+};
+
+window.downloadProgrammeTemplate = function() {
+  const csv = 'activity,start,finish\nAccess / Start on site,2025-05-12,2025-05-12\nContract completion,2029-02-09,2029-02-09\n';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'programme_template.csv';
+  a.click();
+};
+
+window.uploadProgramme = async function() {
+  if (!isAdmin()) return;
+  const file = document.getElementById('prog-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+    const acts = [];
+    lines.slice(1).forEach(line => {
+      const p = line.split(',').map(x => x.trim());
+      if (p.length >= 3) acts.push({ activity: p[0], start: p[1], finish: p[2] });
+    });
+    if (acts.length) {
+      await setDoc(doc(db, 'settings', 'main'), { programme: acts, progVersion: file.name }, { merge: true });
+      alert('Programme updated.');
+    }
+  };
+  reader.readAsText(file);
+};
+
+function render() { renderProgress(); renderAll(); renderMy(); renderDashboard(); renderInbox(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
+
+function renderInbox() {
+  const el = document.getElementById('inbox-list');
+  if (!el) return;
+  if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
+  const sorted = inbox.slice().sort((a, b) => {
+    const da = a.date ? (a.date.toDate ? a.date.toDate() : new Date(a.date)) : new Date(0);
+    const db = b.date ? (b.date.toDate ? b.date.toDate() : new Date(b.date)) : new Date(0);
+    return db - da;
+  });
+  el.innerHTML = sorted.map(m => {
+    const t = m.taskId ? tasks.find(x => x.id === m.taskId) : null;
+    const stillPending = t && (t.acceptance === 'pending' || t.acceptance === 'open');
+    return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
+      <strong>${escape(m.subject || 'Message')}</strong>
+      <small style="color:#656d76; margin-left:8px;">${m.date ? new Date(m.date.toDate ? m.date.toDate() : m.date).toLocaleString() : ''}</small><br>
+      <small>${escape(m.message || '')}</small>
+      <div class="actions" style="margin-top:6px;">
+        ${stillPending ? `<button class="small success" onclick="acceptTask('${m.taskId}')">Accept</button> <button class="small danger" onclick="rejectTask('${m.taskId}')">Reject</button>` : ''}
+        <button class="small secondary" onclick="deleteInboxMessage('${m.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let sortField = 'targetDate';
+let sortDir = 'asc';
+
+window.sortTasks = function(field) {
+  if (sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortField = field; sortDir = 'asc'; }
+  renderAll();
+};
+
+function renderProgress() {
+  const el = document.getElementById('progress-list');
+  if (!el) return;
+  const list = tasks.filter(t => t.status === 'not-started' || t.status === 'in-progress');
+  if (!list.length) { el.innerHTML = '<p>No tasks in progress.</p>'; return; }
+  list.sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
+  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
+  list.forEach(t => {
+    const u = users.find(x => x.uid === t.user);
+    const canComplete = t.user === currentUser.uid && t.status !== 'completed';
+    html += `<tr>
+      <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
+      <td>${t.targetDate||'-'}</td>
+      <td><span class="status ${t.status}">${t.status === 'in-progress' ? 'In Progress' : 'Not Started'}</span></td>
+      <td>
+        ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
+        ${t.user === currentUser.uid && t.status !== 'completed' ? `<button class="small secondary" onclick="releaseTask('${t.id}')">Release</button>` : ''}
+        ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
+      </td>
+      ${isAdmin()?`<td>${t.score!=null?t.score+'/5':'-'}</td>`:''}
+    </tr>`;
+    if (expandedTaskId === t.id) {
+      const isOwner = t.user === currentUser.uid;
+      const canEdit = isOwner || isAdmin();
+      const isCompleted = t.status === 'completed';
+      html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>Owner: ${escape(users.find(u=>u.uid===t.user)?.name || 'TBC')} · Target: ${t.targetDate||'-'}</small>
+        <p>${escape(t.description||'(no description)')}</p>
+        ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
+        <div class="actions" style="margin-top:8px;">
+          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${!isCompleted && isOwner ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
+          ${!isCompleted && isOwner && isOverdue(t) ? `<button class="small" onclick="requestExtension('${t.id}')">Request Extension</button>` : ''}
+          ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
+          ${!isCompleted ? `<button class="small" onclick="addComment('${t.id}')">Comment</button>` : ''}
+          ${isAdmin() ? `<button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
+          <button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button>
+        </div>
+      </td></tr>`;
+    }
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderAll() {
+  const uf = document.getElementById('filter-user').value;
+  const tf = document.getElementById('filter-type').value;
+  const sf = document.getElementById('filter-status').value;
+  let list = tasks.slice();
+  if (uf) list = list.filter(t => t.user === uf);
+  if (tf) list = list.filter(t => t.type === tf);
+  if (sf === 'overdue') list = list.filter(isOverdue);
+  else if (sf === 'pending') list = list.filter(t => t.acceptance === 'pending' || t.acceptance === 'open');
+  else if (sf) list = list.filter(t => t.status === sf);
+  // Sort
+  list.sort((a, b) => {
+    let va, vb;
+    if (sortField === 'user') { va = (users.find(u=>u.uid===a.user)?.name || 'TBC'); vb = (users.find(u=>u.uid===b.user)?.name || 'TBC'); }
+    else if (sortField === 'title') { va = a.title || ''; vb = b.title || ''; }
+    else if (sortField === 'targetDate') { va = a.targetDate || ''; vb = b.targetDate || ''; }
+    else if (sortField === 'status') { va = a.status || ''; vb = b.status || ''; }
+    else { va = ''; vb = ''; }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const arrow = (f) => sortField === f ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  const el = document.getElementById('all-tasks-list');
+  if (!list.length) { el.innerHTML = '<p>No matching tasks.</p>'; return; }
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th onclick="sortTasks('user')" style="cursor:pointer;">User${arrow('user')}</th>
+    <th onclick="sortTasks('title')" style="cursor:pointer;">Task${arrow('title')}</th>
+    <th onclick="sortTasks('targetDate')" style="cursor:pointer;">Target${arrow('targetDate')}</th>
+    <th onclick="sortTasks('status')" style="cursor:pointer;">Status${arrow('status')}</th>
+    <th></th>${isAdmin()?'<th>Score</th>':''}
+  </tr></thead><tbody>`;
+  list.forEach(t => {
+    const u = users.find(x => x.uid === t.user);
+    const canComplete = t.user === currentUser.uid && t.status !== 'completed';
+    html += `<tr>
+      <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
+      <td>${t.targetDate||'-'}</td>
+      <td><span class="status ${t.status==='completed'?'completed':(t.status==='in-progress'?'in-progress':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)))}">${t.status==='completed'?'Completed':(t.status==='in-progress'?'In Progress':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)))}</span></td>
+      <td>
+        ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
+        ${t.user === currentUser.uid && t.status !== 'completed' ? `<button class="small secondary" onclick="releaseTask('${t.id}')">Release</button>` : ''}
+        ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
+      </td>
+      ${isAdmin() ? `<td>${t.score != null ? t.score+'/5' : '-'}</td>` : ''}
+    </tr>`;
+    if (expandedTaskId === t.id) {
+      const isOwner = t.user === currentUser.uid;
+      const canEdit = isOwner || isAdmin();
+      const isCompleted = t.status === 'completed';
+      html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>Owner: ${escape(users.find(u=>u.uid===t.user)?.name || 'TBC')} · Target: ${t.targetDate||'-'}</small>
+        <p>${escape(t.description||'(no description)')}</p>
+        ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
+        <div class="actions" style="margin-top:8px;">
+          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${!isCompleted && isOwner ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
+          ${!isCompleted && isOwner && isOverdue(t) ? `<button class="small" onclick="requestExtension('${t.id}')">Request Extension</button>` : ''}
+          ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
+          ${!isCompleted ? `<button class="small" onclick="addComment('${t.id}')">Comment</button>` : ''}
+          ${isAdmin() ? `<button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
+          <button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button>
+        </div>
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<div class="actions" style="margin-top:6px;"><button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button></div>` : ''}
+      </td></tr>`;
+    }
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function renderMy() {
+  const mine = tasks.filter(t => t.user === currentUser.uid || t.acceptance === 'open');
+  const el = document.getElementById('my-tasks-list');
+  if (!mine.length) { el.innerHTML = '<p>No tasks.</p>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>' +
+    mine.map(t => `<tr><td>${escape(t.title)}</td><td>${t.targetDate||'-'}</td><td>${t.status}</td></tr>`).join('') +
+    '</tbody></table></div>';
+}
+
+function renderDashboard() {
+  const completed = tasks.filter(t => t.status === 'completed').length;
+  const overdue = tasks.filter(isOverdue).length;
+  const start = new Date('2025-05-12'); const end = new Date('2029-02-09'); const now = new Date();
+  const totalDays = Math.round((end - start) / 86400000);
+  const passedDays = Math.max(0, Math.round((now - start) / 86400000));
+  const prog = Math.min(100, Math.round(passedDays / totalDays * 100));
+  document.getElementById('prog-version').textContent = '· ' + progVersion;
+  document.getElementById('dash-content').innerHTML = `
+    <div class="dash-stat"><strong>${prog}%</strong>Elapsed<br><small>${passedDays}/${totalDays} days</small></div>
+    <div class="dash-stat"><strong>${completed}</strong>Completed</div>
+    <div class="dash-stat"><strong>${tasks.length - completed}</strong>Open</div>
+    <div class="dash-stat"><strong>${overdue}</strong>Overdue</div>
+  `;
+  document.getElementById('announcement-text').textContent = announcement;
+  if (isAdmin()) document.getElementById('announcement-edit').value = announcement;
+  const todayStr = today();
+  const active = programme.filter(a => a.start <= todayStr && a.finish >= todayStr);
+  document.getElementById('today-activities').innerHTML = '<strong>Today:</strong>' + (active.length ? active.map(a => `<div class="prog-activity">${escape(a.activity)}</div>`).join('') : '<div class="prog-activity">None</div>');
+}
+
+function populateUserFilter() {
+  const sel = document.getElementById('filter-user');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All</option>';
+  users.forEach(u => sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`);
+}
+
+function populateAssign() {
+  const sel = document.getElementById('task-assign');
+  if (!sel) return;
+  sel.innerHTML = '<option value="self">Myself</option><option value="TBC">TBC (open)</option>';
+  users.forEach(u => { if (u.uid !== currentUser.uid) sel.innerHTML += `<option value="${u.uid}">${escape(u.name)}</option>`; });
+}
+
+function updateInboxBadge() {
+  const badge = document.getElementById('inbox-badge');
+  if (!badge) return;
+  const unread = inbox.filter(m => !m.read).length;
+  badge.textContent = unread;
+  badge.classList.toggle('hidden', unread === 0);
+}
+
+window.showPerfTab = function(tab) {
+  document.getElementById('perf-team').classList.toggle('hidden', tab !== 'team');
+  document.getElementById('perf-indiv').classList.toggle('hidden', tab !== 'indiv');
+  document.getElementById('perf-team-tab').classList.toggle('active', tab === 'team');
+  document.getElementById('perf-indiv-tab').classList.toggle('active', tab === 'indiv');
+  if (tab === 'indiv') populateIndivUsers();
+};
+
+function populateIndivUsers() {
+  const sel = document.getElementById('indiv-user');
+  if (!sel) return;
+  sel.innerHTML = users.filter(u => u.role !== 'admin').map(u => `<option value="${u.uid}">${escape(u.name)}</option>`).join('');
+}
+
+function renderPerf() {
+  if (!isAdmin()) return;
+  const userMap = {};
+  users.filter(u => u.role !== 'admin').forEach(u => {
+    userMap[u.uid] = { name: u.name, total: 0, completed: 0, overdue: 0, scores: [], onTime: 0 };
+  });
+  tasks.forEach(t => {
+    if (!t.user || !userMap[t.user]) return;
+    const b = userMap[t.user];
+    b.total++;
+    if (t.status === 'completed') {
+      b.completed++;
+      if (t.actualDate && t.targetDate && t.actualDate <= t.targetDate) b.onTime++;
+    }
+    if (isOverdue(t)) b.overdue++;
+    if (t.score != null) b.scores.push(t.score);
+  });
+  const arr = Object.values(userMap);
+  const totalTasks = tasks.length;
+  const totalCompleted = tasks.filter(t => t.status === 'completed').length;
+  const scored = tasks.filter(t => t.score != null);
+  const avgScore = scored.length ? (scored.reduce((a,t) => a + t.score, 0) / scored.length).toFixed(1) : '-';
+  document.getElementById('perf-summary').innerHTML = `
+    <div class="stat"><strong>${users.filter(u=>u.role!=='admin').length}</strong>Users</div>
+    <div class="stat"><strong>${totalTasks}</strong>Tasks</div>
+    <div class="stat"><strong>${totalCompleted}</strong>Completed</div>
+    <div class="stat"><strong>${avgScore}</strong>Avg score</div>`;
+  let html = `<div class="table-wrap"><table><thead><tr><th>Teammate</th><th>Tasks</th><th>Completed</th><th>On-time</th><th>Overdue</th><th>Avg Score</th></tr></thead><tbody>`;
+  arr.sort((a,b) => b.total - a.total).forEach(b => {
+    const avg = b.scores.length ? (b.scores.reduce((a,c)=>a+c,0)/b.scores.length).toFixed(1) : '-';
+    const onTimePct = b.completed ? Math.round(b.onTime / b.completed * 100) + '%' : '-';
+    html += `<tr><td>${escape(b.name)}</td><td>${b.total}</td><td>${b.completed}</td><td>${onTimePct}</td><td>${b.overdue}</td><td>${avg}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('perf-table').innerHTML = html || '<p>No data.</p>';
+
+  const typeCount = {};
+  const defaultTypes = ['Drawing submission','Document submission','Coordination','Calculation','Material Submission','Others'];
+  defaultTypes.forEach(t => typeCount[t] = 0);
+  tasks.forEach(t => { if (t.type) typeCount[t.type] = (typeCount[t.type] || 0) + 1; });
+  let th = '<div class="table-wrap"><table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>';
+  Object.keys(typeCount).forEach(t => th += `<tr><td>${escape(t)}</td><td>${typeCount[t]}</td></tr>`);
+  th += '</tbody></table></div>';
+  document.getElementById('type-breakdown').innerHTML = th;
+}
+
+(async () => {
+  const settingsRef = doc(db, 'settings', 'main');
+  const snap = await getDoc(settingsRef);
+  if (!snap.exists()) {
+    await setDoc(settingsRef, {
+      announcement,
+      progVersion,
+      programme: [
+        { activity: 'Access / Start on site', start: '2025-05-12', finish: '2025-05-12' },
+        { activity: 'Contract completion', start: '2029-02-09', finish: '2029-02-09' }
+      ]
+    });
+  }
+  renderTypeDropdowns();
+})();
+</script>
+</head>
+<body>
+<header>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14</small></h1>
+  <div id="user-info"></div>
+</header>
+<div class="container">
+  <div id="auth-section" class="login-box card">
+    <div class="tabs">
+      <button id="tab-login" class="active" onclick="showAuth('login')">Login</button>
+      <button id="tab-register" onclick="showAuth('register')">Register</button>
+    </div>
+    <form id="login-form">
+      <div style="margin-bottom:12px;"><label>Email or prefix</label><input type="text" id="login-user" required style="width:100%;" placeholder="admin"></div>
+      <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="login-pass" required style="width:100%;"></div>
+      <button type="submit" style="width:100%;">Login</button>
+      <p style="margin-top:12px; text-align:center;"><a href="#" onclick="forgotPassword(); return false;" style="font-size:13px; color:#0969da;">Forgot password?</a></p>
+    </form>
+    <form id="register-form" class="hidden">
+      <div style="margin-bottom:12px;"><label>Email prefix (becomes name@newland.com.hk)</label><input type="text" id="reg-user" required style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Display Name</label><input type="text" id="reg-name" required style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Password</label><input type="password" id="reg-pass" required minlength="6" style="width:100%;"></div>
+      <div style="margin-bottom:12px;"><label>Confirm Password</label><input type="password" id="reg-pass2" required minlength="6" style="width:100%;"></div>
+      <button type="submit" style="width:100%;">Create Account</button>
+    </form>
+    <p id="auth-error" style="color:#b91c1c; font-size:0.9rem; margin-top:8px;"></p>
+  </div>
+
+  <div id="app-section" class="hidden">
+    <div id="dashboard" class="dashboard">
+      <h2>Programme & Task Status <small id="prog-version" style="font-weight:normal; opacity:0.85;"></small></h2>
+      <div id="dash-content" class="dash-stats"></div>
+      <div id="announcement-box" style="margin-top:12px; background:#f6f8fa; padding:10px 12px; border-radius:6px; border:1px solid #d0d7de;">
+        <strong>Announcement</strong>
+        <div class="marquee-wrap"><div id="announcement-text" class="marquee-text"></div></div>
+        <div id="admin-announcement" class="hidden" style="margin-top:8px;">
+          <textarea id="announcement-edit" rows="3" style="width:100%;"></textarea>
+          <button type="button" class="small" onclick="saveAnnouncement()" style="margin-top:6px;">Save Announcement</button>
+        </div>
+      </div>
+      <div id="today-activities" style="margin-top:12px;"></div>
+      <div id="admin-prog-upload" class="hidden" style="margin-top:12px;">
+        <label style="color:white;">Update Master Programme (admin)</label>
+        <div style="margin-top:6px;"><button type="button" class="small secondary" onclick="downloadProgrammeTemplate()">Download CSV Template</button></div>
+        <input type="file" id="prog-file" accept=".csv,.json,.txt" style="margin-top:8px; background:white; color:#1e293b;">
+        <button type="button" class="small" onclick="uploadProgramme()" style="margin-top:6px;">Upload & Replace</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button onclick="showView('progress')" class="active">Task In Progress</button>
+      <button onclick="showView('all')">All Tasks</button>
+      <button onclick="showView('my')">My Tasks</button>
+      <button onclick="showView('add')">Add Task</button>
+      <button onclick="showView('inbox')">Inbox <span id="inbox-badge" class="badge hidden">0</span></button>
+      <button id="admin-perf" class="hidden" onclick="showView('perf')">Performance</button>
+      <button onclick="showView('settings')">Settings</button>
+    </div>
+
+    <div id="view-progress" class="card">
+      <h2>Task In Progress</h2>
+      <div id="progress-list"></div>
+    </div>
+
+    <div id="view-all" class="card hidden">
+      <h2>All Tasks</h2>
+      <div class="grid" style="margin-bottom:12px;">
+        <div><label>User</label><select id="filter-user" style="width:100%;"><option value="">All</option></select></div>
+        <div><label>Type</label><select id="filter-type" style="width:100%;"><option value="">All</option>
+          <option>Drawing submission</option><option>Document submission</option><option>Coordination</option>
+          <option>Calculation</option><option>Material Submission</option><option>Others</option>
+        </select></div>
+        <div><label>Status</label><select id="filter-status" style="width:100%;"><option value="">All</option>
+          <option value="not-started">Not Started</option><option value="in-progress">In Progress</option>
+          <option value="completed">Completed</option><option value="overdue">Overdue</option>
+          <option value="pending">Pending</option>
+        </select></div>
+      </div>
+      <div id="all-tasks-list"></div>
+    </div>
+
+    <div id="view-my" class="card hidden"><h2>My Tasks</h2><div id="my-tasks-list"></div></div>
+
+    <div id="view-add" class="card hidden">
+      <h2>Add Task</h2>
+      <form id="task-form">
+        <div class="grid">
+          <div><label>Task Title *</label><input type="text" id="task-title" required style="width:100%;"></div>
+          <div><label>Type</label>
+            <select id="task-type" style="width:100%;">
+              <option>Drawing submission</option><option>Document submission</option>
+              <option>Coordination</option><option>Calculation</option>
+              <option>Material Submission</option><option>Others</option>
+            </select>
+          </div>
+          <div><label>Target Completion Date *</label><input type="date" id="task-target" required style="width:100%;"></div>
+          <div><label>Status</label>
+            <select id="task-status" style="width:100%;">
+              <option value="not-started">Not Started</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div id="assign-box" class="hidden">
+            <label>Assign to</label>
+            <select id="task-assign" style="width:100%;">
+              <option value="self">Myself</option>
+              <option value="TBC">TBC (open)</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px;"><label>Description</label><textarea id="task-desc" rows="3" style="width:100%;"></textarea></div>
+        <div style="margin-top:12px;"><button type="submit">Save Task</button></div>
+        <input type="hidden" id="edit-id">
+      </form>
+    </div>
+
+    <div id="view-inbox" class="card hidden"><h2>Inbox</h2><div id="inbox-list"></div></div>
+    <div id="view-settings" class="card hidden">
+      <h2>Settings</h2>
+      <button type="button" onclick="changePassword()">Change Password</button>
+      <div style="margin-top:16px;">
+        <h3>Task Types</h3>
+        <button type="button" class="small" onclick="addTaskType()">Add New Type</button>
+      </div>
+      <div id="admin-tools" class="hidden" style="margin-top:16px;">
+        <h3>Admin Tools</h3>
+        <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+        <div style="margin-top:12px;">
+          <h4>Tasks Due Within 3 Days</h4>
+          <div id="due-soon-list"></div>
+        </div>
+        <div style="margin-top:16px;">
+          <h4>Admin Notification Email</h4>
+          <input type="email" id="admin-notify-email" value="kwtsang37@gmail.com" style="width:100%; margin-bottom:6px;">
+          <button type="button" class="small" onclick="saveAdminEmail()">Save Email</button>
+          <p style="font-size:12px; color:#656d76; margin-top:4px;">Receives: new account, task completed, date change, extension request.</p>
+        </div>
+        <div style="margin-top:16px;">
+          <h4>User List & Task Status</h4>
+          <div id="user-list"></div>
+        </div>
+        <div style="margin-top:16px;">
+          <h4 style="cursor:pointer;" onclick="document.getElementById('version-history').classList.toggle('hidden')">Version History ▾</h4>
+          <div id="version-history" class="hidden" style="font-size:13px; color:#656d76; max-height:240px; overflow-y:auto; padding:8px; background:#f6f8fa; border-radius:6px;">
+            <p><b>v13.9</b> — Task In Progress expand works; same actions as All Tasks</p>
+            <p><b>v13.8</b> — Task In Progress has Edit, Delete, Comment, Score</p>
+            <p><b>v13.7</b> — Task In Progress page as main view</p>
+            <p><b>v13.5</b> — Inbox sorted newest first; no self-notification on date change</p>
+            <p><b>v13.4</b> — Sortable columns on All Tasks (default Target)</p>
+            <p><b>v13.2</b> — Admin reminder only for new due-soon tasks</p>
+            <p><b>v13.1</b> — Delete account button in User List</p>
+            <p><b>v12.8</b> — Per-task Due Soon list with individual Send Reminder</p>
+            <p><b>v12.1</b> — Release button to open task for others</p>
+            <p><b>v12</b> — Inbox messages show date and time</p>
+            <p><b>v11.7</b> — Admin notification email changeable in Settings</p>
+            <p><b>v11.4</b> — Forgot password, password confirm, admin approval</p>
+            <p><b>v11.1</b> — Fix completed → in-progress status display</p>
+            <p><b>v11</b> — Accept/Reject buttons in main task list</p>
+            <p><b>v10.9</b> — Edit completed tasks, notify admin on reopen</p>
+            <p><b>v10.1</b> — Email notifications (overdue, assigned, open)</p>
+            <p><b>v9.7</b> — Request Extension for overdue tasks</p>
+            <p><b>v9</b> — GitHub-style UI</p>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <h4>Export Completed Tasks</h4>
+          <div class="grid">
+            <div><label>From</label><input type="date" id="export-from" style="width:100%;"></div>
+            <div><label>To</label><input type="date" id="export-to" style="width:100%;"></div>
+          </div>
+          <button type="button" class="small" onclick="exportCompleted()" style="margin-top:8px;">Export to Excel (CSV)</button>
+        </div>
+      </div>
+    </div>
+    <div id="view-perf" class="card hidden">
+      <h2>Performance</h2>
+      <div class="tabs" style="margin-bottom:12px;">
+        <button class="active" id="perf-team-tab" onclick="showPerfTab('team')">Team</button>
+        <button id="perf-indiv-tab" onclick="showPerfTab('indiv')">Individual</button>
+      </div>
+      <div id="perf-team">
+        <h3>Team Overview</h3>
+        <div id="perf-summary" class="summary-grid" style="margin-bottom:16px;"></div>
+        <div id="perf-table"></div>
+        <h3 style="margin-top:20px;">Task Type Breakdown</h3>
+        <div id="type-breakdown"></div>
+      </div>
+      <div id="perf-indiv" class="hidden">
+        <h3>Individual Performance</h3>
+        <div class="grid" style="margin-bottom:12px;">
+          <div><label>User</label><select id="indiv-user" style="width:100%;"></select></div>
+          <div><label>From</label><input type="date" id="indiv-from" style="width:100%;"></div>
+          <div><label>To</label><input type="date" id="indiv-to" style="width:100%;"></div>
+        </div>
+        <button type="button" onclick="renderIndividual()">Search</button>
+        <div id="indiv-result" style="margin-top:16px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
