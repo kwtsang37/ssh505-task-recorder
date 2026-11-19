@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     document.getElementById('task-form').reset();
-    showView('all');
+    showView('progress');
   };
 });
 
@@ -343,7 +343,7 @@ onAuthStateChanged(auth, async (user) => {
       document.getElementById('user-info').innerHTML = `${currentUser.name} <button onclick="logout()" class="secondary small">Logout</button>`;
     }
     startListeners();
-    showView('all');
+    showView('progress');
     // Remind admin only if there are NEW tasks due within 3 days
     if (isAdmin()) {
       setTimeout(async () => {
@@ -426,7 +426,8 @@ function startListeners() {
 }
 
 window.showView = function(v) {
-  ['all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
+  ['progress','all','my','add','inbox','settings','perf'].forEach(id => document.getElementById('view-'+id).classList.toggle('hidden', id !== v));
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.getAttribute('onclick') && b.getAttribute('onclick').includes("'"+v+"'")));
   if (v === 'inbox') {
     renderInbox();
     // Mark all current inbox messages as read
@@ -467,6 +468,7 @@ window.markCompleted = async function(id) {
 
 window.toggleTaskDetail = function(id) {
   expandedTaskId = expandedTaskId === id ? null : id;
+  renderProgress();
   renderAll();
   renderMy();
 };
@@ -843,13 +845,18 @@ window.uploadProgramme = async function() {
   reader.readAsText(file);
 };
 
-function render() { renderAll(); renderMy(); renderDashboard(); renderInbox(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
+function render() { renderProgress(); renderAll(); renderMy(); renderDashboard(); renderInbox(); if (isAdmin()) renderPerf(); updateInboxBadge(); }
 
 function renderInbox() {
   const el = document.getElementById('inbox-list');
   if (!el) return;
   if (!inbox.length) { el.innerHTML = '<p>No messages.</p>'; return; }
-  el.innerHTML = inbox.map(m => {
+  const sorted = inbox.slice().sort((a, b) => {
+    const da = a.date ? (a.date.toDate ? a.date.toDate() : new Date(a.date)) : new Date(0);
+    const db = b.date ? (b.date.toDate ? b.date.toDate() : new Date(b.date)) : new Date(0);
+    return db - da;
+  });
+  el.innerHTML = sorted.map(m => {
     const t = m.taskId ? tasks.find(x => x.id === m.taskId) : null;
     const stillPending = t && (t.acceptance === 'pending' || t.acceptance === 'open');
     return `<div style="padding:10px 0; border-bottom:1px solid #eee;">
@@ -872,6 +879,54 @@ window.sortTasks = function(field) {
   else { sortField = field; sortDir = 'asc'; }
   renderAll();
 };
+
+function renderProgress() {
+  const el = document.getElementById('progress-list');
+  if (!el) return;
+  const list = tasks.filter(t => t.status === 'not-started' || t.status === 'in-progress');
+  if (!list.length) { el.innerHTML = '<p>No tasks in progress.</p>'; return; }
+  list.sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
+  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
+  list.forEach(t => {
+    const u = users.find(x => x.uid === t.user);
+    const canComplete = t.user === currentUser.uid && t.status !== 'completed';
+    html += `<tr>
+      <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
+      <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
+      <td>${t.targetDate||'-'}</td>
+      <td><span class="status ${t.status}">${t.status === 'in-progress' ? 'In Progress' : 'Not Started'}</span></td>
+      <td>
+        ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
+        ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
+        ${t.user === currentUser.uid && t.status !== 'completed' ? `<button class="small secondary" onclick="releaseTask('${t.id}')">Release</button>` : ''}
+        ${canComplete ? `<button class="small success" onclick="markCompleted('${t.id}')">Complete</button>` : ''}
+      </td>
+      ${isAdmin()?`<td>${t.score!=null?t.score+'/5':'-'}</td>`:''}
+    </tr>`;
+    if (expandedTaskId === t.id) {
+      const isOwner = t.user === currentUser.uid;
+      const canEdit = isOwner || isAdmin();
+      const isCompleted = t.status === 'completed';
+      html += `<tr class="detail-row"><td colspan="${isAdmin()?6:5}">
+        <strong>${escape(t.title)}</strong> <span class="type-badge">${escape(t.type||'')}</span><br>
+        <small>Owner: ${escape(users.find(u=>u.uid===t.user)?.name || 'TBC')} · Target: ${t.targetDate||'-'}</small>
+        <p>${escape(t.description||'(no description)')}</p>
+        ${t.comments && t.comments.length ? '<div class="comment">' + t.comments.map(c => escape(c)).join('<br>') + '</div>' : ''}
+        <div class="actions" style="margin-top:8px;">
+          ${canEdit ? `<button class="small secondary" onclick="editTask('${t.id}')">Edit</button>` : ''}
+          ${!isCompleted && isOwner ? `<button class="small success" onclick="markCompleted('${t.id}')">Mark Completed</button>` : ''}
+          ${!isCompleted && isOwner && isOverdue(t) ? `<button class="small" onclick="requestExtension('${t.id}')">Request Extension</button>` : ''}
+          ${canEdit ? `<button class="small danger" onclick="deleteTask('${t.id}')">Delete</button>` : ''}
+          ${!isCompleted ? `<button class="small" onclick="addComment('${t.id}')">Comment</button>` : ''}
+          ${isAdmin() ? `<button class="small secondary" onclick="setScore('${t.id}')">Score</button>` : ''}
+          <button class="small secondary" onclick="toggleTaskDetail('${t.id}')">Close</button>
+        </div>
+      </td></tr>`;
+    }
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
 
 function renderAll() {
   const uf = document.getElementById('filter-user').value;
@@ -1078,7 +1133,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v13.4</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -1125,6 +1180,7 @@ function renderPerf() {
     </div>
 
     <div class="tabs">
+      <button onclick="showView('progress')" class="active">Task In Progress</button>
       <button onclick="showView('all')">All Tasks</button>
       <button onclick="showView('my')">My Tasks</button>
       <button onclick="showView('add')">Add Task</button>
@@ -1133,7 +1189,12 @@ function renderPerf() {
       <button onclick="showView('settings')">Settings</button>
     </div>
 
-    <div id="view-all" class="card">
+    <div id="view-progress" class="card">
+      <h2>Task In Progress</h2>
+      <div id="progress-list"></div>
+    </div>
+
+    <div id="view-all" class="card hidden">
       <h2>All Tasks</h2>
       <div class="grid" style="margin-bottom:12px;">
         <div><label>User</label><select id="filter-user" style="width:100%;"><option value="">All</option></select></div>
@@ -1212,16 +1273,23 @@ function renderPerf() {
           <div id="user-list"></div>
         </div>
         <div style="margin-top:16px;">
-          <h4>Version History</h4>
-          <div style="font-size:13px; color:#656d76; max-height:200px; overflow-y:auto;">
-            <p><b>v11.4</b> — Forgot password, password confirm, admin approval for new accounts</p>
+          <h4 style="cursor:pointer;" onclick="document.getElementById('version-history').classList.toggle('hidden')">Version History ▾</h4>
+          <div id="version-history" class="hidden" style="font-size:13px; color:#656d76; max-height:240px; overflow-y:auto; padding:8px; background:#f6f8fa; border-radius:6px;">
+            <p><b>v13.9</b> — Task In Progress expand works; same actions as All Tasks</p>
+            <p><b>v13.8</b> — Task In Progress has Edit, Delete, Comment, Score</p>
+            <p><b>v13.7</b> — Task In Progress page as main view</p>
+            <p><b>v13.5</b> — Inbox sorted newest first; no self-notification on date change</p>
+            <p><b>v13.4</b> — Sortable columns on All Tasks (default Target)</p>
+            <p><b>v13.2</b> — Admin reminder only for new due-soon tasks</p>
+            <p><b>v13.1</b> — Delete account button in User List</p>
+            <p><b>v12.8</b> — Per-task Due Soon list with individual Send Reminder</p>
+            <p><b>v12.1</b> — Release button to open task for others</p>
+            <p><b>v12</b> — Inbox messages show date and time</p>
+            <p><b>v11.7</b> — Admin notification email changeable in Settings</p>
+            <p><b>v11.4</b> — Forgot password, password confirm, admin approval</p>
             <p><b>v11.1</b> — Fix completed → in-progress status display</p>
             <p><b>v11</b> — Accept/Reject buttons in main task list</p>
             <p><b>v10.9</b> — Edit completed tasks, notify admin on reopen</p>
-            <p><b>v10.8</b> — Assignment notification goes only to assigned user</p>
-            <p><b>v10.6</b> — Inbox badge counts unread messages only</p>
-            <p><b>v10.5</b> — Notify admin on target date change</p>
-            <p><b>v10.4</b> — Completed status shows correctly after Complete</p>
             <p><b>v10.1</b> — Email notifications (overdue, assigned, open)</p>
             <p><b>v9.7</b> — Request Extension for overdue tasks</p>
             <p><b>v9</b> — GitHub-style UI</p>
