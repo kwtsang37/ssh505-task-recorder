@@ -450,8 +450,8 @@ window.markCompleted = async function(id) {
   if (!confirm('Mark as Completed?')) return;
   const t = tasks.find(x => x.id === id);
   await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today(), acceptance: null });
-  // Notify admin
-  const adminUser = users.find(u => u.role === 'admin' || (u.email || '').toLowerCase().includes('admin'));
+  // Notify only the real admin (never the user who completed it)
+  const adminUser = users.find(u => u.role === 'admin');
   if (adminUser && adminUser.uid !== currentUser.uid) {
     await addDoc(collection(db, 'inbox'), {
       to: adminUser.uid,
@@ -885,16 +885,35 @@ function renderProgress() {
   if (!el) return;
   const list = tasks.filter(t => t.status === 'not-started' || t.status === 'in-progress');
   if (!list.length) { el.innerHTML = '<p>No tasks in progress.</p>'; return; }
-  list.sort((a, b) => (a.targetDate || '').localeCompare(b.targetDate || ''));
-  let html = `<div class="table-wrap"><table><thead><tr><th>User</th><th>Task</th><th>Target</th><th>Status</th><th></th>${isAdmin()?'<th>Score</th>':''}</tr></thead><tbody>`;
+  list.sort((a, b) => {
+    let va, vb;
+    if (sortField === 'user') { va = (users.find(u=>u.uid===a.user)?.name || 'TBC'); vb = (users.find(u=>u.uid===b.user)?.name || 'TBC'); }
+    else if (sortField === 'title') { va = a.title || ''; vb = b.title || ''; }
+    else if (sortField === 'targetDate') { va = a.targetDate || ''; vb = b.targetDate || ''; }
+    else if (sortField === 'status') { va = isOverdue(a) ? 'late' : (a.status || ''); vb = isOverdue(b) ? 'late' : (b.status || ''); }
+    else { va = ''; vb = ''; }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const arrow = (f) => sortField === f ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th onclick="sortTasks('user')" style="cursor:pointer;">User${arrow('user')}</th>
+    <th onclick="sortTasks('title')" style="cursor:pointer;">Task${arrow('title')}</th>
+    <th onclick="sortTasks('targetDate')" style="cursor:pointer;">Target${arrow('targetDate')}</th>
+    <th onclick="sortTasks('status')" style="cursor:pointer;">Status${arrow('status')}</th>
+    <th></th>${isAdmin()?'<th>Score</th>':''}
+  </tr></thead><tbody>`;
   list.forEach(t => {
     const u = users.find(x => x.uid === t.user);
     const canComplete = t.user === currentUser.uid && t.status !== 'completed';
+    const statusText = isOverdue(t) ? 'Late' : (t.status === 'in-progress' ? 'In Progress' : 'Not Started');
+    const statusClass = isOverdue(t) ? 'overdue' : t.status;
     html += `<tr>
       <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${t.status}">${t.status === 'in-progress' ? 'In Progress' : 'Not Started'}</span></td>
+      <td><span class="status ${statusClass}">${statusText}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
@@ -967,7 +986,7 @@ function renderAll() {
       <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${t.status==='completed'?'completed':(t.status==='in-progress'?'in-progress':(isOverdue(t)?'overdue':(t.acceptance==='pending'?'pending':t.status)))}">${t.status==='completed'?'Completed':(t.status==='in-progress'?'In Progress':(isOverdue(t)?'Overdue':(t.acceptance==='pending'?'Pending':t.status)))}</span></td>
+      <td><span class="status ${t.status==='completed'?'completed':(isOverdue(t)?'overdue':(t.status==='in-progress'?'in-progress':(t.acceptance==='pending'?'pending':t.status)))}">${t.status==='completed'?'Completed':(isOverdue(t)?'Late':(t.status==='in-progress'?'In Progress':(t.acceptance==='pending'?'Pending':t.status)))}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
@@ -1133,7 +1152,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.2</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
