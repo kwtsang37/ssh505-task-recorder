@@ -681,15 +681,22 @@ window.deleteUser = async function(uid) {
 };
 
 window.approveUser = async function(uid) {
-  if (!isAdmin()) return;
-  await updateDoc(doc(db, 'users', uid), { role: 'user' });
-  alert('User approved.');
-  renderPending();
+  if (!isAdmin()) { alert('Admin only.'); return; }
+  try {
+    await updateDoc(doc(db, 'users', uid), { role: 'user' });
+    // Update local array immediately
+    const u = users.find(x => x.uid === uid);
+    if (u) u.role = 'user';
+    alert('User approved. They can now log in.');
+    renderPending();
+    renderUserList();
+  } catch (err) { alert('Approve failed: ' + err.message); }
 };
 
 function renderPending() {
   const el = document.getElementById('pending-list');
-  if (!el || !isAdmin()) return;
+  if (!el) return;
+  if (!isAdmin()) { el.innerHTML = '<p>Admin only.</p>'; return; }
   const pending = users.filter(u => u.role === 'pending');
   if (!pending.length) { el.innerHTML = '<p>No pending accounts.</p>'; return; }
   el.innerHTML = pending.map(u => `<div style="padding:6px 0; border-bottom:1px solid #eee;">
@@ -1152,7 +1159,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.2</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.4</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
@@ -1277,6 +1284,10 @@ function renderPerf() {
       <div id="admin-tools" class="hidden" style="margin-top:16px;">
         <h3>Admin Tools</h3>
         <button type="button" class="small secondary" onclick="checkOverdue()">Send Overdue Notifications</button>
+        <div style="margin-top:16px;">
+          <h4>Pending Approvals</h4>
+          <div id="pending-list"><p>Loading...</p></div>
+        </div>
         <div style="margin-top:12px;">
           <h4>Tasks Due Within 3 Days</h4>
           <div id="due-soon-list"></div>
