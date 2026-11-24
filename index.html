@@ -451,7 +451,7 @@ window.markCompleted = async function(id) {
   const t = tasks.find(x => x.id === id);
   await updateDoc(doc(db, 'tasks', id), { status: 'completed', actualDate: today(), acceptance: null });
   // Notify only the real admin (never the user who completed it)
-  const adminUser = users.find(u => u.role === 'admin');
+  const adminUser = users.find(u => u.role === 'admin' && (u.email || '').toLowerCase() === ADMIN_EMAIL);
   if (adminUser && adminUser.uid !== currentUser.uid) {
     await addDoc(collection(db, 'inbox'), {
       to: adminUser.uid,
@@ -553,8 +553,8 @@ window.acceptTask = async function(id) {
   try {
     const t = tasks.find(x => x.id === id);
     await updateDoc(doc(db, 'tasks', id), { status: 'in-progress', acceptance: null, user: currentUser.uid });
-    // Notify admin
-    const adminUser = users.find(u => u.role === 'admin');
+    // Notify only the real admin
+    const adminUser = users.find(u => u.role === 'admin' && (u.email || '').toLowerCase() === ADMIN_EMAIL);
     if (adminUser && adminUser.uid !== currentUser.uid) {
       await addDoc(collection(db, 'inbox'), {
         to: adminUser.uid,
@@ -1159,7 +1159,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.4</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.5</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
