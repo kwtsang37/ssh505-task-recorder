@@ -139,7 +139,14 @@ function daysUntil(dateStr) {
   const d = new Date(dateStr); const t = new Date(); t.setHours(0,0,0,0);
   return Math.round((d - t) / 86400000);
 }
-function isOverdue(t) { return t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) < 0; }
+function getStatusDisplay(t) {
+  if (t.status === 'completed') return { text: 'Completed', cls: 'completed' };
+  if (isOverdue(t)) return { text: 'Late', cls: 'overdue' };
+  if (t.acceptance === 'pending') return { text: 'Pending', cls: 'pending' };
+  if (t.status === 'in-progress') return { text: 'In Progress', cls: 'in-progress' };
+  if (t.status === 'not-started') return { text: 'Not Started', cls: 'not-started' };
+  return { text: t.status || '-', cls: t.status || '' };
+}
 function escape(s) { return String(s||'').replace(/[&<>"']/g, m => ({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[m])); }
 function scoreLabel(s) {
   if (s == null) return '';
@@ -880,11 +887,19 @@ function renderInbox() {
 
 let sortField = 'targetDate';
 let sortDir = 'asc';
+let progSortField = 'targetDate';
+let progSortDir = 'asc';
 
 window.sortTasks = function(field) {
   if (sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
   else { sortField = field; sortDir = 'asc'; }
   renderAll();
+};
+
+window.sortProgress = function(field) {
+  if (progSortField === field) progSortDir = progSortDir === 'asc' ? 'desc' : 'asc';
+  else { progSortField = field; progSortDir = 'asc'; }
+  renderProgress();
 };
 
 function renderProgress() {
@@ -894,28 +909,29 @@ function renderProgress() {
   if (!list.length) { el.innerHTML = '<p>No tasks in progress.</p>'; return; }
   list.sort((a, b) => {
     let va, vb;
-    if (sortField === 'user') { va = (users.find(u=>u.uid===a.user)?.name || 'TBC'); vb = (users.find(u=>u.uid===b.user)?.name || 'TBC'); }
-    else if (sortField === 'title') { va = a.title || ''; vb = b.title || ''; }
-    else if (sortField === 'targetDate') { va = a.targetDate || ''; vb = b.targetDate || ''; }
-    else if (sortField === 'status') { va = isOverdue(a) ? 'late' : (a.status || ''); vb = isOverdue(b) ? 'late' : (b.status || ''); }
+    if (progSortField === 'user') { va = (users.find(u=>u.uid===a.user)?.name || 'TBC'); vb = (users.find(u=>u.uid===b.user)?.name || 'TBC'); }
+    else if (progSortField === 'title') { va = a.title || ''; vb = b.title || ''; }
+    else if (progSortField === 'targetDate') { va = a.targetDate || ''; vb = b.targetDate || ''; }
+    else if (progSortField === 'status') { va = isOverdue(a) ? 'late' : (a.acceptance === 'pending' ? 'pending' : (a.status || '')); vb = isOverdue(b) ? 'late' : (b.acceptance === 'pending' ? 'pending' : (b.status || '')); }
     else { va = ''; vb = ''; }
-    if (va < vb) return sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    if (va < vb) return progSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return progSortDir === 'asc' ? 1 : -1;
     return 0;
   });
-  const arrow = (f) => sortField === f ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+  const arrow = (f) => progSortField === f ? (progSortDir === 'asc' ? ' ▲' : ' ▼') : '';
   let html = `<div class="table-wrap"><table><thead><tr>
-    <th onclick="sortTasks('user')" style="cursor:pointer;">User${arrow('user')}</th>
-    <th onclick="sortTasks('title')" style="cursor:pointer;">Task${arrow('title')}</th>
-    <th onclick="sortTasks('targetDate')" style="cursor:pointer;">Target${arrow('targetDate')}</th>
-    <th onclick="sortTasks('status')" style="cursor:pointer;">Status${arrow('status')}</th>
+    <th onclick="sortProgress('user')" style="cursor:pointer;">User${arrow('user')}</th>
+    <th onclick="sortProgress('title')" style="cursor:pointer;">Task${arrow('title')}</th>
+    <th onclick="sortProgress('targetDate')" style="cursor:pointer;">Target${arrow('targetDate')}</th>
+    <th onclick="sortProgress('status')" style="cursor:pointer;">Status${arrow('status')}</th>
     <th></th>${isAdmin()?'<th>Score</th>':''}
   </tr></thead><tbody>`;
   list.forEach(t => {
     const u = users.find(x => x.uid === t.user);
     const canComplete = t.user === currentUser.uid && t.status !== 'completed';
-    const statusText = isOverdue(t) ? 'Late' : (t.status === 'in-progress' ? 'In Progress' : 'Not Started');
-    const statusClass = isOverdue(t) ? 'overdue' : t.status;
+    const st = getStatusDisplay(t);
+    const statusText = st.text;
+    const statusClass = st.cls;
     html += `<tr>
       <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
@@ -993,7 +1009,7 @@ function renderAll() {
       <td>${t.user ? escape(u ? (u.name || u.email || 'Unknown') : 'Unknown') : 'TBC'}</td>
       <td><span class="task-title" onclick="toggleTaskDetail('${t.id}')">${escape(t.title)}</span> <span class="type-badge">${escape(t.type||'')}</span></td>
       <td>${t.targetDate||'-'}</td>
-      <td><span class="status ${t.status==='completed'?'completed':(isOverdue(t)?'overdue':(t.status==='in-progress'?'in-progress':(t.acceptance==='pending'?'pending':t.status)))}">${t.status==='completed'?'Completed':(isOverdue(t)?'Late':(t.status==='in-progress'?'In Progress':(t.acceptance==='pending'?'Pending':t.status)))}</span></td>
+      <td><span class="status ${getStatusDisplay(t).cls}">${getStatusDisplay(t).text}</span></td>
       <td>
         ${t.acceptance === 'open' && !t.user ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button>` : ''}
         ${t.acceptance === 'pending' && t.user === currentUser.uid ? `<button class="small success" onclick="acceptTask('${t.id}')">Accept</button> <button class="small danger" onclick="rejectTask('${t.id}')">Reject</button>` : ''}
@@ -1033,7 +1049,7 @@ function renderMy() {
   const el = document.getElementById('my-tasks-list');
   if (!mine.length) { el.innerHTML = '<p>No tasks.</p>'; return; }
   el.innerHTML = '<div class="table-wrap"><table><thead><tr><th>Task</th><th>Target</th><th>Status</th></tr></thead><tbody>' +
-    mine.map(t => `<tr><td>${escape(t.title)}</td><td>${t.targetDate||'-'}</td><td>${t.status}</td></tr>`).join('') +
+    mine.map(t => `<tr><td>${escape(t.title)}</td><td>${t.targetDate||'-'}</td><td><span class="status ${getStatusDisplay(t).cls}">${getStatusDisplay(t).text}</span></td></tr>`).join('') +
     '</tbody></table></div>';
 }
 
@@ -1159,7 +1175,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.5</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.9</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
