@@ -139,6 +139,8 @@ function daysUntil(dateStr) {
   const d = new Date(dateStr); const t = new Date(); t.setHours(0,0,0,0);
   return Math.round((d - t) / 86400000);
 }
+function isOverdue(t) { return t.status !== 'completed' && t.targetDate && daysUntil(t.targetDate) < 0; }
+
 function getStatusDisplay(t) {
   if (t.status === 'completed') return { text: 'Completed', cls: 'completed' };
   if (isOverdue(t)) return { text: 'Late', cls: 'overdue' };
@@ -1175,7 +1177,7 @@ function renderPerf() {
 </head>
 <body>
 <header>
-  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v14.9</small></h1>
+  <h1>SS H505 ACMV Task Recorder <small style="font-weight:normal; opacity:0.8;">(Online) v15</small></h1>
   <div id="user-info"></div>
 </header>
 <div class="container">
